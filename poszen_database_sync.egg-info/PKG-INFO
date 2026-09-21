@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: poszen-database-sync
+Version: 0.1.0
+Summary: Bidirectional, conflict-safe synchronization between SQLite and MariaDB
+Requires-Python: >=3.11
+Requires-Dist: mariadb>=1.1.10

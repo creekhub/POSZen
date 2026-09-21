@@ -1,0 +1,2 @@
+[console_scripts]
+poszen-db-sync = database_sync.cli:main
