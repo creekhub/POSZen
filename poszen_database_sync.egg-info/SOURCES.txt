@@ -4,6 +4,7 @@ pyproject.toml
 ../database_sync/__main__.py
 ../database_sync/cli.py
 ../database_sync/db.py
+../database_sync/export_mariadb_schema.py
 ../database_sync/reconcile.py
 ../database_sync/state.py
 ../poszen_database_sync.egg-info/PKG-INFO

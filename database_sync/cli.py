@@ -1,18 +1,34 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
 import time
 from typing import Any
 
-from .db import MariaDbStore, SqliteStore, TableSchema, key_for
-from .reconcile import Action, reconcile_table, row_hash
-from .state import load, save
+try:
+    from .db import MariaDbStore, SqliteStore, TableSchema, key_for
+    from .reconcile import Action, reconcile_table, row_hash
+    from .state import load, save
+except ImportError:
+    from db import MariaDbStore, SqliteStore, TableSchema, key_for
+    from reconcile import Action, reconcile_table, row_hash
+    from state import load, save
 
 LOGGER = logging.getLogger("poszen-db-sync")
 EXCLUDED_TABLES = {"migrations", "cache", "cache_locks", "jobs", "job_batches", "failed_jobs", "sessions", "password_reset_tokens", "users"}
+
+
+@dataclass(frozen=True)
+class TablePlan:
+    local_table: str
+    remote_table: str
+    local_schema: TableSchema
+    remote_schema: TableSchema
+    local_columns: tuple[str, ...]
+    remote_columns: tuple[str, ...]
 
 
 def env_file(path: Path) -> dict[str, str]:
@@ -50,49 +66,80 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def _compatible_tables(local: SqliteStore, remote: MariaDbStore, requested: set[str] | None) -> tuple[list[tuple[str, TableSchema, tuple[str, ...]]], list[str]]:
-    names = (local.tables() & remote.tables()) - EXCLUDED_TABLES
+def _identifier_map(identifiers: tuple[str, ...] | set[str]) -> dict[str, str] | None:
+    result: dict[str, str] = {}
+    for identifier in identifiers:
+        normalized = identifier.casefold()
+        if normalized in result and result[normalized] != identifier:
+            return None
+        result[normalized] = identifier
+    return result
+
+
+def _rename_row(row: dict[str, Any], source_columns: tuple[str, ...], target_columns: tuple[str, ...]) -> dict[str, Any]:
+    source_by_name = {column.casefold(): column for column in source_columns}
+    return {target: row[source_by_name[target.casefold()]] for target in target_columns}
+
+
+def _compatible_tables(local: SqliteStore, remote: MariaDbStore, requested: set[str] | None) -> tuple[list[TablePlan], list[str]]:
+    local_tables = local.tables()
+    remote_tables = remote.tables()
+    local_by_name = _identifier_map(local_tables) or {}
+    remote_by_name = _identifier_map(remote_tables) or {}
+    LOGGER.debug("local tables: %s", sorted(local_tables))
+    LOGGER.debug("remote tables: %s", sorted(remote_tables))
+    LOGGER.debug("case-insensitive common tables: %s", sorted(set(local_by_name) & set(remote_by_name)))
+    excluded = {name.casefold() for name in EXCLUDED_TABLES}
+    names = set(local_by_name) & set(remote_by_name) - excluded
     if requested is not None:
-        names &= requested
-    plans: list[tuple[str, TableSchema, tuple[str, ...]]] = []
+        names &= {name.casefold() for name in requested}
+    plans: list[TablePlan] = []
     problems: list[str] = []
-    for name in sorted(names):
-        local_schema = local.schema(name)
-        remote_schema = remote.schema(name)
-        if not local_schema.primary_key or local_schema.primary_key != remote_schema.primary_key:
-            problems.append(f"{name}: primary keys differ or are missing")
+    for normalized_name in sorted(names):
+        local_table = local_by_name[normalized_name]
+        remote_table = remote_by_name[normalized_name]
+        local_schema = local.schema(local_table)
+        remote_schema = remote.schema(remote_table)
+        local_primary_keys = _identifier_map(local_schema.primary_key)
+        remote_primary_keys = _identifier_map(remote_schema.primary_key)
+        if not local_primary_keys or not remote_primary_keys or tuple(local_primary_keys) != tuple(remote_primary_keys):
+            problems.append(f"{local_table}: primary keys differ or are missing")
             continue
-        if set(local_schema.columns) != set(remote_schema.columns):
-            problems.append(f"{name}: columns differ between local and online schemas")
+        local_columns = _identifier_map(local_schema.columns)
+        remote_columns = _identifier_map(remote_schema.columns)
+        if not local_columns or not remote_columns or set(local_columns) != set(remote_columns):
+            problems.append(f"{local_table}: columns differ between local and online schemas")
             continue
-        columns = tuple(column for column in local_schema.columns if column in remote_schema.columns)
-        if any(column not in columns for column in local_schema.primary_key):
-            problems.append(f"{name}: primary-key columns are not common")
+        local_columns_in_order = local_schema.columns
+        remote_columns_in_order = tuple(remote_columns[column.casefold()] for column in local_columns_in_order)
+        if any(column.casefold() not in remote_columns for column in local_schema.primary_key):
+            problems.append(f"{local_table}: primary-key columns are not common")
             continue
-        if not columns:
-            problems.append(f"{name}: no common columns")
+        if not local_columns_in_order:
+            problems.append(f"{local_table}: no common columns")
             continue
-        plans.append((name, local_schema, columns))
-    missing = requested - names if requested is not None else set()
+        plans.append(TablePlan(local_table, remote_table, local_schema, remote_schema, local_columns_in_order, remote_columns_in_order))
+    requested_names = {name.casefold() for name in requested} if requested is not None else set()
+    missing = requested_names - names if requested is not None else set()
     problems.extend(f"{name}: not present in both databases" for name in sorted(missing))
     return plans, problems
 
 
-def _apply_actions(local: SqliteStore, remote: MariaDbStore, actions_by_table: dict[str, list[Action]], schemas: dict[str, tuple[TableSchema, tuple[str, ...]]]) -> None:
+def _apply_actions(local: SqliteStore, remote: MariaDbStore, actions_by_table: dict[str, list[Action]], plans: dict[str, TablePlan]) -> None:
     for table, actions in actions_by_table.items():
-        local_schema, columns = schemas[table]
+        plan = plans[table]
         local.begin()
         remote.begin()
         try:
             for action in actions:
                 if action.direction == "to_remote":
-                    remote.upsert(table, columns, local_schema.primary_key, action.row or {})
+                    remote.upsert(plan.remote_table, plan.remote_columns, plan.remote_schema.primary_key, _rename_row(action.row or {}, plan.local_columns, plan.remote_columns))
                 elif action.direction == "to_local":
-                    local.upsert(table, columns, local_schema.primary_key, action.row or {})
+                    local.upsert(plan.local_table, plan.local_columns, plan.local_schema.primary_key, action.row or {})
                 elif action.direction == "delete_remote":
-                    remote.delete(table, local_schema.primary_key, action.row or {})
+                    remote.delete(plan.remote_table, plan.remote_schema.primary_key, _rename_row(action.row or {}, plan.local_columns, plan.remote_columns))
                 elif action.direction == "delete_local":
-                    local.delete(table, local_schema.primary_key, action.row or {})
+                    local.delete(plan.local_table, plan.local_schema.primary_key, action.row or {})
             local.commit()
             remote.commit()
         except Exception:
@@ -141,23 +188,24 @@ def run_once(args: argparse.Namespace) -> int:
         if problems and requested is not None:
             return 2
         actions_by_table: dict[str, list[Action]] = {}
-        schemas: dict[str, tuple[TableSchema, tuple[str, ...]]] = {}
+        table_plans: dict[str, TablePlan] = {}
         conflicts = 0
-        for table, local_schema, columns in plans:
-            local_rows = local.snapshot(table, columns, local_schema.primary_key, args.batch_size)
-            remote_rows = remote.snapshot(table, columns, local_schema.primary_key, args.batch_size)
-            baseline = state.get("tables", {}).get(table, {}).get("baseline", {})
+        for plan in plans:
+            local_rows = local.snapshot(plan.local_table, plan.local_columns, plan.local_schema.primary_key, args.batch_size)
+            remote_rows_raw = remote.snapshot(plan.remote_table, plan.remote_columns, plan.remote_schema.primary_key, args.batch_size)
+            remote_rows = {key_for(_rename_row(row, plan.remote_columns, plan.local_columns), plan.local_schema.primary_key): _rename_row(row, plan.remote_columns, plan.local_columns) for row in remote_rows_raw.values()}
+            baseline = state.get("tables", {}).get(plan.local_table, {}).get("baseline", {})
             actions, table_conflicts = reconcile_table(
                 {"local": local_rows, "remote": remote_rows},
                 baseline,
                 allow_deletes=args.allow_deletes,
             )
-            actions_by_table[table] = actions
-            schemas[table] = (local_schema, columns)
+            actions_by_table[plan.local_table] = actions
+            table_plans[plan.local_table] = plan
             conflicts += len(table_conflicts)
-            LOGGER.info("%s: local=%d remote=%d planned=%d conflicts=%d", table, len(local_rows), len(remote_rows), len(actions), len(table_conflicts))
+            LOGGER.info("%s: local=%d remote=%d planned=%d conflicts=%d", plan.local_table, len(local_rows), len(remote_rows), len(actions), len(table_conflicts))
             for conflict in table_conflicts:
-                LOGGER.error("%s key=%s kind=%s", table, conflict.key, conflict.kind)
+                LOGGER.error("%s key=%s kind=%s", plan.local_table, conflict.key, conflict.kind)
 
         total_actions = sum(len(actions) for actions in actions_by_table.values())
         if conflicts:
@@ -167,11 +215,11 @@ def run_once(args: argparse.Namespace) -> int:
             LOGGER.info("Dry run complete: %d changes would be applied", total_actions)
             return 0
 
-        _apply_actions(local, remote, actions_by_table, schemas)
+        _apply_actions(local, remote, actions_by_table, table_plans)
         new_tables: dict[str, Any] = {}
-        for table, local_schema, columns in plans:
-            rows = local.snapshot(table, columns, local_schema.primary_key, args.batch_size)
-            new_tables[table] = {"baseline": {key: row_hash(row) for key, row in rows.items()}}
+        for plan in plans:
+            rows = local.snapshot(plan.local_table, plan.local_columns, plan.local_schema.primary_key, args.batch_size)
+            new_tables[plan.local_table] = {"baseline": {key: row_hash(row) for key, row in rows.items()}}
         save(state_path, {"version": 1, "tables": new_tables})
         LOGGER.info("Apply complete: %d changes committed; state saved to %s", total_actions, state_path)
         return 0
@@ -193,3 +241,7 @@ def main(argv: list[str] | None = None) -> int:
             return result
         LOGGER.warning("Retrying in %d seconds", args.poll)
         time.sleep(args.poll)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
