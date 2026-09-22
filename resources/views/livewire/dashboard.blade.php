@@ -31,6 +31,30 @@
             @endforeach
         </section>
 
+        @if ($showTaskReminder && $dueTasks->isNotEmpty())
+            <section class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm" role="alert">
+                <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Task reminder</p>
+                        <h2 class="mt-1 text-2xl font-bold text-amber-950">{{ $dueTasks->count() }} task{{ $dueTasks->count() === 1 ? '' : 's' }} need{{ $dueTasks->count() === 1 ? 's' : '' }} attention</h2>
+                    </div>
+                    <button type="button" wire:click="dismissTaskReminder" class="rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100">Dismiss</button>
+                </div>
+                <div class="mt-4 grid gap-3 md:grid-cols-2">
+                    @foreach ($dueTasks as $task)
+                        <div class="flex items-start justify-between gap-3 rounded-xl bg-white/80 p-4 ring-1 ring-amber-200">
+                            <div class="min-w-0">
+                                <p class="font-semibold text-slate-900">{{ $task->Title }}</p>
+                                <p class="mt-1 text-sm text-amber-800">Due {{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
+                            </div>
+                            <button type="button" wire:click="completeTask({{ $task->Id }})" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Complete</button>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <section class="mt-8 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
                 <div>
@@ -133,6 +157,80 @@
                         </div>
                     @empty
                         <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No starting cash entries recorded for today.</p>
+                    @endforelse
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-8 grid grid-cols-2 gap-6">
+            <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Quick action</p>
+                <h2 class="mt-1 text-2xl font-bold">Create a task</h2>
+                <form wire:submit="createTask" class="mt-5 space-y-4">
+                    <div>
+                        <label for="task-title" class="mb-2 block text-sm font-medium text-slate-600">Title</label>
+                        <input id="task-title" wire:model="taskTitle" type="text" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Call customer about order">
+                        @error('taskTitle') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label for="task-due-date" class="mb-2 block text-sm font-medium text-slate-600">Reminder date</label>
+                        <input id="task-due-date" wire:model="taskDueDate" type="date" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                        @error('taskDueDate') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label for="task-customer" class="mb-2 block text-sm font-medium text-slate-600">Customer</label>
+                            <input id="task-customer" list="task-customer-options" wire:model.live="taskCustomerSearch" type="search" placeholder="Type customer name..." autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                            <datalist id="task-customer-options">
+                                @foreach ($taskCustomers as $customer)
+                                    <option value="{{ $customer->Name }}"></option>
+                                @endforeach
+                            </datalist>
+                        </div>
+                        <div>
+                            <label for="task-document" class="mb-2 block text-sm font-medium text-slate-600">Document</label>
+                            <input id="task-document" list="task-document-options" wire:model.live="taskDocumentSearch" type="search" placeholder="Type document number..." autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                            <datalist id="task-document-options">
+                                @foreach ($taskDocuments as $document)
+                                    <option value="{{ $document->Number }}" label="{{ $document->customer_name ?? 'Walk-in customer' }} · {{ \Carbon\Carbon::parse($document->Date)->format('M j, Y') }}"></option>
+                                @endforeach
+                            </datalist>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="task-description" class="mb-2 block text-sm font-medium text-slate-600">Notes</label>
+                        <textarea id="task-description" wire:model="taskDescription" rows="3" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Optional details"></textarea>
+                    </div>
+                    @if ($taskMessage)
+                        <p class="text-sm font-medium text-emerald-700">{{ $taskMessage }}</p>
+                    @endif
+                    <button type="submit" class="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700">Save task</button>
+                </form>
+            </div>
+
+            <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Follow-up list</p>
+                        <h2 class="mt-1 text-2xl font-bold">Open tasks</h2>
+                    </div>
+                    <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">{{ $tasks->count() }}</span>
+                </div>
+                <div class="mt-5 space-y-3">
+                    @forelse ($tasks as $task)
+                        <div class="flex items-start justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3">
+                            <div class="min-w-0">
+                                <p class="font-semibold text-slate-900">{{ $task->Title }}</p>
+                                <p class="mt-1 text-sm {{ \Carbon\Carbon::parse($task->DueDate)->lessThanOrEqualTo(\Carbon\Carbon::today()) ? 'font-semibold text-amber-700' : 'text-slate-500' }}">{{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
+                                @if ($task->Description)
+                                    <p class="mt-2 text-sm text-slate-600">{{ $task->Description }}</p>
+                                @endif
+                            </div>
+                            <button type="button" wire:click="completeTask({{ $task->Id }})" class="shrink-0 rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Done</button>
+                        </div>
+                    @empty
+                        <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No open tasks.</p>
                     @endforelse
                 </div>
             </div>

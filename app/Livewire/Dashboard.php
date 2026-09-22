@@ -14,12 +14,23 @@ class Dashboard extends Component
     public string $chartPeriod = 'Weekly';
     public string $chartStartDate = '';
     public string $chartEndDate = '';
+    public string $taskTitle = '';
+    public string $taskDescription = '';
+    public string $taskDueDate = '';
+    public ?int $taskCustomerId = null;
+    public ?int $taskDocumentId = null;
+    public string $taskCustomerSearch = '';
+    public string $taskDocumentSearch = '';
+    public string $taskMessage = '';
+    public string $taskError = '';
+    public bool $showTaskReminder = true;
 
     public function mount(): void
     {
         $today = Carbon::today();
         $this->chartStartDate = $today->copy()->subDays(6)->toDateString();
         $this->chartEndDate = $today->toDateString();
+        $this->taskDueDate = $today->toDateString();
 
         $this->accountCustomerId = DB::table('Document')
             ->where('DocumentTypeId', 2)
@@ -59,6 +70,80 @@ class Dashboard extends Component
         if ($customerId) {
             $this->accountCustomerId = (int) $customerId;
         }
+    }
+
+    public function updatedTaskCustomerSearch(string $value): void
+    {
+        $this->taskCustomerId = DB::table('Customer')
+            ->where('Name', trim($value))
+            ->where('IsEnabled', 1)
+            ->where('IsCustomer', 1)
+            ->value('Id');
+
+        $this->taskCustomerId = $this->taskCustomerId ? (int) $this->taskCustomerId : null;
+    }
+
+    public function updatedTaskDocumentSearch(string $value): void
+    {
+        $this->taskDocumentId = DB::table('Document')
+            ->where('Number', trim($value))
+            ->where('DocumentTypeId', 2)
+            ->value('Id');
+
+        $this->taskDocumentId = $this->taskDocumentId ? (int) $this->taskDocumentId : null;
+    }
+
+    public function createTask(): void
+    {
+        $this->taskMessage = '';
+        $this->taskError = '';
+
+        $validated = $this->validate([
+            'taskTitle' => ['required', 'string', 'max:255'],
+            'taskDescription' => ['nullable', 'string', 'max:5000'],
+            'taskDueDate' => ['required', 'date'],
+            'taskCustomerId' => ['nullable', 'integer', 'exists:Customer,Id'],
+            'taskDocumentId' => ['nullable', 'integer', 'exists:Document,Id'],
+        ]);
+
+        DB::table('Task')->insert([
+            'Title' => $validated['taskTitle'],
+            'Description' => $validated['taskDescription'] ?: null,
+            'DueDate' => $validated['taskDueDate'],
+            'IsCompleted' => false,
+            'UserId' => Auth::id(),
+            'CustomerId' => $validated['taskCustomerId'],
+            'DocumentId' => $validated['taskDocumentId'],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->reset([
+            'taskTitle',
+            'taskDescription',
+            'taskCustomerId',
+            'taskDocumentId',
+            'taskCustomerSearch',
+            'taskDocumentSearch',
+        ]);
+        $this->taskDueDate = Carbon::today()->toDateString();
+        $this->taskMessage = 'Task created.';
+    }
+
+    public function completeTask(int $taskId): void
+    {
+        DB::table('Task')
+            ->where('Id', $taskId)
+            ->where('UserId', Auth::id())
+            ->where('IsCompleted', false)
+            ->update(['IsCompleted' => true, 'updated_at' => now()]);
+
+        $this->showTaskReminder = false;
+    }
+
+    public function dismissTaskReminder(): void
+    {
+        $this->showTaskReminder = false;
     }
 
     public function render()
@@ -242,6 +327,38 @@ class Dashboard extends Component
         $accountTotalPayment = $unpaidSales->sum('paid_amount');
         $accountBalance = $unpaidSales->sum('balance');
 
+        $taskCustomers = DB::table('Customer')
+            ->where('IsEnabled', 1)
+            ->where('IsCustomer', 1)
+            ->orderBy('Name')
+            ->get(['Id', 'Name']);
+
+        $taskDocuments = DB::table('Document as document')
+            ->leftJoin('Customer as customer', 'customer.Id', '=', 'document.CustomerId')
+            ->where('document.DocumentTypeId', 2)
+            ->orderByDesc('document.Date')
+            ->orderByDesc('document.Id')
+            ->limit(100)
+            ->get(['document.Id', 'document.Number', 'document.Date', 'customer.Name as customer_name']);
+
+        $tasks = DB::table('Task as task')
+            ->leftJoin('Customer as customer', 'customer.Id', '=', 'task.CustomerId')
+            ->leftJoin('Document as document', 'document.Id', '=', 'task.DocumentId')
+            ->where('task.UserId', Auth::id())
+            ->where('task.IsCompleted', false)
+            ->orderBy('task.DueDate')
+            ->orderByDesc('task.Id')
+            ->get([
+                'task.Id',
+                'task.Title',
+                'task.Description',
+                'task.DueDate',
+                'customer.Name as customer_name',
+                'document.Number as document_number',
+            ]);
+
+        $dueTasks = $tasks->filter(fn ($task) => Carbon::parse($task->DueDate)->lessThanOrEqualTo($today));
+
         return view('livewire.dashboard', [
             'user' => $user,
             'stats' => $stats,
@@ -254,6 +371,10 @@ class Dashboard extends Component
             'accountGrandTotal' => $accountGrandTotal,
             'accountTotalPayment' => $accountTotalPayment,
             'accountBalance' => $accountBalance,
+            'taskCustomers' => $taskCustomers,
+            'taskDocuments' => $taskDocuments,
+            'tasks' => $tasks,
+            'dueTasks' => $dueTasks,
         ]);
     }
 
