@@ -341,6 +341,11 @@ class Dashboard extends Component
             ->limit(100)
             ->get(['document.Id', 'document.Number', 'document.Date', 'customer.Name as customer_name']);
 
+        $taskProducts = DB::table('Product')
+            ->where('IsEnabled', 1)
+            ->orderBy('Name')
+            ->get(['Id', 'Name']);
+
         $tasks = DB::table('Task as task')
             ->leftJoin('Customer as customer', 'customer.Id', '=', 'task.CustomerId')
             ->leftJoin('Document as document', 'document.Id', '=', 'task.DocumentId')
@@ -373,6 +378,7 @@ class Dashboard extends Component
             'accountBalance' => $accountBalance,
             'taskCustomers' => $taskCustomers,
             'taskDocuments' => $taskDocuments,
+            'taskProducts' => $taskProducts,
             'tasks' => $tasks,
             'dueTasks' => $dueTasks,
         ]);

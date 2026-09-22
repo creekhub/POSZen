@@ -167,9 +167,10 @@
                 <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Quick action</p>
                 <h2 class="mt-1 text-2xl font-bold">Create a task</h2>
                 <form wire:submit="createTask" class="mt-5 space-y-4">
-                    <div>
+                    <div class="relative" data-task-mentions>
                         <label for="task-title" class="mb-2 block text-sm font-medium text-slate-600">Title</label>
-                        <input id="task-title" wire:model="taskTitle" type="text" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Call customer about order">
+                        <input id="task-title" wire:model="taskTitle" type="text" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Type / for products or @ for customers" autocomplete="off">
+                        <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"></div>
                         @error('taskTitle') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
                     </div>
                     <div>
@@ -197,9 +198,10 @@
                             </datalist>
                         </div>
                     </div>
-                    <div>
+                    <div class="relative" data-task-mentions>
                         <label for="task-description" class="mb-2 block text-sm font-medium text-slate-600">Notes</label>
-                        <textarea id="task-description" wire:model="taskDescription" rows="3" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Optional details"></textarea>
+                        <textarea id="task-description" wire:model="taskDescription" rows="3" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Type / for products or @ for customers"></textarea>
+                        <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"></div>
                     </div>
                     @if ($taskMessage)
                         <p class="text-sm font-medium text-emerald-700">{{ $taskMessage }}</p>
@@ -560,9 +562,116 @@
 </style>
 
 <script>
+    window.taskMentionData = {
+        products: @json($taskProducts->map(fn ($product) => ['name' => $product->Name])->values()),
+        customers: @json($taskCustomers->map(fn ($customer) => ['name' => $customer->Name])->values()),
+    };
+
     window.printStateOfAccount = function () {
         window.print();
     };
+
+    (function () {
+        const getContext = (textarea) => {
+            const beforeCursor = textarea.value.slice(0, textarea.selectionStart);
+            const match = beforeCursor.match(/(?:^|\s)([/@])([^\s]*)$/);
+
+            if (!match) {
+                return null;
+            }
+
+            return {
+                trigger: match[1],
+                query: match[2].toLowerCase(),
+                start: beforeCursor.length - match[0].length + (match[0][0] === ' ' ? 1 : 0),
+                end: textarea.selectionStart,
+            };
+        };
+
+        const closeSuggestions = (container) => {
+            const suggestions = container.querySelector('[data-task-suggestions]');
+
+            if (suggestions) {
+                suggestions.classList.add('hidden');
+                suggestions.innerHTML = '';
+            }
+        };
+
+        const showSuggestions = (textarea) => {
+            const container = textarea.closest('[data-task-mentions]');
+            const suggestions = container?.querySelector('[data-task-suggestions]');
+            const context = getContext(textarea);
+
+            if (!container || !suggestions || !context) {
+                if (container) {
+                    closeSuggestions(container);
+                }
+
+                return;
+            }
+
+            const source = context.trigger === '/'
+                ? (window.taskMentionData?.products || [])
+                : (window.taskMentionData?.customers || []);
+            const matches = source
+                .filter((item) => item.name.toLowerCase().includes(context.query))
+                .slice(0, 8);
+
+            if (!matches.length) {
+                closeSuggestions(container);
+                return;
+            }
+
+            suggestions.innerHTML = matches.map((item) => `
+                <button type="button" data-task-suggestion="${item.name.replace(/"/g, '&quot;')}" class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                    <span class="mr-2 font-semibold text-indigo-600">${context.trigger}</span>${item.name}
+                </button>
+            `).join('');
+            suggestions.classList.remove('hidden');
+        };
+
+        document.addEventListener('input', (event) => {
+            if (event.target.matches('[data-task-mentions] input, [data-task-mentions] textarea')) {
+                showSuggestions(event.target);
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && event.target.matches('[data-task-mentions] input, [data-task-mentions] textarea')) {
+                closeSuggestions(event.target.closest('[data-task-mentions]'));
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            const suggestion = event.target.closest('[data-task-suggestion]');
+
+            if (!suggestion) {
+                return;
+            }
+
+            const container = suggestion.closest('[data-task-mentions]');
+            const field = container?.querySelector('input, textarea');
+            const context = field ? getContext(field) : null;
+
+            if (!field || !context) {
+                return;
+            }
+
+            const name = suggestion.dataset.taskSuggestion;
+            field.setRangeText(`${context.trigger}${name} `, context.start, context.end, 'end');
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            closeSuggestions(container);
+            field.focus();
+        });
+
+        document.addEventListener('click', (event) => {
+            document.querySelectorAll('[data-task-mentions]').forEach((container) => {
+                if (!container.contains(event.target)) {
+                    closeSuggestions(container);
+                }
+            });
+        });
+    })();
 
     document.addEventListener('livewire:init', function () {
         if (window.dashboardEventSource) {
