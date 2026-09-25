@@ -24,6 +24,10 @@ class Dashboard extends Component
     public string $taskMessage = '';
     public string $taskError = '';
     public bool $showTaskReminder = true;
+    public ?int $editingTaskId = null;
+    public string $editTaskTitle = '';
+    public string $editTaskDescription = '';
+    public string $editTaskDueDate = '';
 
     public function mount(): void
     {
@@ -134,16 +138,85 @@ class Dashboard extends Component
     {
         DB::table('Task')
             ->where('Id', $taskId)
-            ->where('UserId', Auth::id())
             ->where('IsCompleted', false)
-            ->update(['IsCompleted' => true, 'updated_at' => now()]);
+            ->update([
+                'IsCompleted' => true,
+                'CompletedByUserId' => Auth::id(),
+                'CompletedAt' => now(),
+                'updated_at' => now(),
+            ]);
 
         $this->showTaskReminder = false;
+    }
+
+    public function startEditingTask(int $taskId): void
+    {
+        $task = DB::table('Task')
+            ->where('Id', $taskId)
+            ->where('UserId', Auth::id())
+            ->where('IsCompleted', false)
+            ->first();
+
+        if (! $task) {
+            return;
+        }
+
+        $this->editingTaskId = (int) $task->Id;
+        $this->editTaskTitle = (string) $task->Title;
+        $this->editTaskDescription = (string) ($task->Description ?? '');
+        $this->editTaskDueDate = (string) $task->DueDate;
+    }
+
+    public function cancelEditingTask(): void
+    {
+        $this->reset(['editingTaskId', 'editTaskTitle', 'editTaskDescription', 'editTaskDueDate']);
+    }
+
+    public function updateTask(): void
+    {
+        if (! $this->editingTaskId) {
+            return;
+        }
+
+        $validated = $this->validate([
+            'editTaskTitle' => ['required', 'string', 'max:255'],
+            'editTaskDescription' => ['nullable', 'string', 'max:5000'],
+            'editTaskDueDate' => ['required', 'date'],
+        ]);
+
+        $updated = DB::table('Task')
+            ->where('Id', $this->editingTaskId)
+            ->where('UserId', Auth::id())
+            ->where('IsCompleted', false)
+            ->update([
+                'Title' => $validated['editTaskTitle'],
+                'Description' => $validated['editTaskDescription'] ?: null,
+                'DueDate' => $validated['editTaskDueDate'],
+                'updated_at' => now(),
+            ]);
+
+        if ($updated) {
+            $this->taskMessage = 'Task updated.';
+        }
+
+        $this->cancelEditingTask();
     }
 
     public function dismissTaskReminder(): void
     {
         $this->showTaskReminder = false;
+    }
+
+    public function checkTaskReminder(): void
+    {
+        $hasDueTaskToday = DB::table('Task')
+            ->where('IsCompleted', false)
+            ->whereDate('DueDate', Carbon::today())
+            ->exists();
+
+        if ($hasDueTaskToday) {
+            $this->showTaskReminder = true;
+        }
     }
 
     public function render()
@@ -349,12 +422,12 @@ class Dashboard extends Component
         $tasks = DB::table('Task as task')
             ->leftJoin('Customer as customer', 'customer.Id', '=', 'task.CustomerId')
             ->leftJoin('Document as document', 'document.Id', '=', 'task.DocumentId')
-            ->where('task.UserId', Auth::id())
             ->where('task.IsCompleted', false)
             ->orderBy('task.DueDate')
             ->orderByDesc('task.Id')
             ->get([
                 'task.Id',
+                'task.UserId as user_id',
                 'task.Title',
                 'task.Description',
                 'task.DueDate',
@@ -362,7 +435,7 @@ class Dashboard extends Component
                 'document.Number as document_number',
             ]);
 
-        $dueTasks = $tasks->filter(fn ($task) => Carbon::parse($task->DueDate)->lessThanOrEqualTo($today));
+        $dueTasks = $tasks->filter(fn ($task) => Carbon::parse($task->DueDate)->isSameDay($today));
 
         return view('livewire.dashboard', [
             'user' => $user,
@@ -381,6 +454,7 @@ class Dashboard extends Component
             'taskProducts' => $taskProducts,
             'tasks' => $tasks,
             'dueTasks' => $dueTasks,
+
         ]);
     }
 

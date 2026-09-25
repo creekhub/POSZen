@@ -32,27 +32,30 @@
         </section>
 
         @if ($showTaskReminder && $dueTasks->isNotEmpty())
-            <section class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm" role="alert">
-                <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Task reminder</p>
-                        <h2 class="mt-1 text-2xl font-bold text-amber-950">{{ $dueTasks->count() }} task{{ $dueTasks->count() === 1 ? '' : 's' }} need{{ $dueTasks->count() === 1 ? 's' : '' }} attention</h2>
-                    </div>
-                    <button type="button" wire:click="dismissTaskReminder" class="rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100">Dismiss</button>
-                </div>
-                <div class="mt-4 grid gap-3 md:grid-cols-2">
-                    @foreach ($dueTasks as $task)
-                        <div class="flex items-start justify-between gap-3 rounded-xl bg-white/80 p-4 ring-1 ring-amber-200">
-                            <div class="min-w-0">
-                                <p class="font-semibold text-slate-900">{{ $task->Title }}</p>
-                                <p class="mt-1 text-sm text-amber-800">Due {{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
-                                <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
-                            </div>
-                            <button type="button" wire:click="completeTask({{ $task->Id }})" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Complete</button>
+            <div class="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center overflow-hidden overscroll-contain bg-slate-950/60 p-4 pointer-events-auto" role="presentation" tabindex="-1">
+                <section class="w-full max-w-2xl rounded-2xl border border-amber-200 bg-white p-5 shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="task-reminder-title">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Task reminder</p>
+                            <h2 id="task-reminder-title" class="mt-1 text-2xl font-bold text-amber-950">{{ $dueTasks->count() }} task{{ $dueTasks->count() === 1 ? '' : 's' }} need{{ $dueTasks->count() === 1 ? 's' : '' }} attention</h2>
                         </div>
-                    @endforeach
-                </div>
-            </section>
+                        <button type="button" wire:click="dismissTaskReminder" aria-label="Close task reminders" class="rounded-lg border border-amber-300 px-3 py-2 text-xl font-semibold leading-none text-amber-800 hover:bg-amber-100">&times;</button>
+                    </div>
+                    <div class="mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+                        @foreach ($dueTasks as $task)
+                            <div class="flex items-start justify-between gap-3 rounded-xl bg-white/80 p-4 ring-1 ring-amber-200">
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-slate-900">{{ $task->Title }}</p>
+                                    <p class="mt-1 text-sm text-amber-800">Due {{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
+                                    <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
+                                </div>
+                                <button type="button" wire:click="completeTask({{ $task->Id }})" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Complete</button>
+                            </div>
+                        @endforeach
+                    </div>
+                    <button type="button" wire:click="dismissTaskReminder" class="mt-5 w-full rounded-xl border border-amber-300 px-4 py-3 text-sm font-semibold text-amber-900 hover:bg-amber-100">Review later</button>
+                </section>
+            </div>
         @endif
 
         <section class="mt-8 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
@@ -221,15 +224,35 @@
                 <div class="mt-5 space-y-3">
                     @forelse ($tasks as $task)
                         <div class="flex items-start justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3">
-                            <div class="min-w-0">
-                                <p class="font-semibold text-slate-900">{{ $task->Title }}</p>
-                                <p class="mt-1 text-sm {{ \Carbon\Carbon::parse($task->DueDate)->lessThanOrEqualTo(\Carbon\Carbon::today()) ? 'font-semibold text-amber-700' : 'text-slate-500' }}">{{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
-                                <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
-                                @if ($task->Description)
-                                    <p class="mt-2 text-sm text-slate-600">{{ $task->Description }}</p>
-                                @endif
-                            </div>
-                            <button type="button" wire:click="completeTask({{ $task->Id }})" class="shrink-0 rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Done</button>
+                            @if ($editingTaskId === (int) $task->Id)
+                                <form wire:submit.prevent="updateTask" class="w-full space-y-3">
+                                    <input wire:model="editTaskTitle" type="text" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    @error('editTaskTitle') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
+                                    <textarea wire:model="editTaskDescription" rows="2" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"></textarea>
+                                    @error('editTaskDescription') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
+                                    <input wire:model="editTaskDueDate" type="date" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    @error('editTaskDueDate') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
+                                    <div class="flex gap-2">
+                                        <button type="button" wire:click="updateTask" wire:loading.attr="disabled" wire:target="updateTask" class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Save changes</button>
+                                        <button type="button" wire:click="cancelEditingTask" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white">Cancel</button>
+                                    </div>
+                                </form>
+                            @else
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-slate-900">{{ $task->Title }}</p>
+                                    <p class="mt-1 text-sm {{ \Carbon\Carbon::parse($task->DueDate)->lessThanOrEqualTo(\Carbon\Carbon::today()) ? 'font-semibold text-amber-700' : 'text-slate-500' }}">{{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
+                                    <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
+                                    @if ($task->Description)
+                                        <p class="mt-2 text-sm text-slate-600">{{ $task->Description }}</p>
+                                    @endif
+                                </div>
+                                <div class="flex shrink-0 items-start gap-2">
+                                    @if ((int) $task->user_id === (int) auth()->id())
+                                        <button type="button" wire:click="startEditingTask({{ $task->Id }})" class="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Edit</button>
+                                    @endif
+                                    <button type="button" wire:click="completeTask({{ $task->Id }})" class="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Done</button>
+                                </div>
+                            @endif
                         </div>
                     @empty
                         <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No open tasks.</p>
@@ -570,6 +593,36 @@
     window.printStateOfAccount = function () {
         window.print();
     };
+
+    const syncTaskReminderBodyLock = () => {
+        const isOpen = Boolean(document.querySelector('[role="alertdialog"]'));
+        document.body.classList.toggle('overflow-hidden', isOpen);
+        document.documentElement.classList.toggle('overflow-hidden', isOpen);
+    };
+
+    if (!window.taskReminderLockObserver) {
+        window.taskReminderLockObserver = new MutationObserver(syncTaskReminderBodyLock);
+        window.taskReminderLockObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    syncTaskReminderBodyLock();
+
+    const checkTaskReminderEveryThirtyMinutes = () => {
+        if (document.querySelector('[role="alertdialog"]')) {
+            return;
+        }
+
+        const dashboardRoot = document.querySelector('[wire\\:id]');
+        const componentId = dashboardRoot?.getAttribute('wire:id');
+
+        if (componentId) {
+            Livewire.find(componentId)?.$call('checkTaskReminder');
+        }
+    };
+
+    if (!window.taskReminderInterval) {
+        window.taskReminderInterval = window.setInterval(checkTaskReminderEveryThirtyMinutes, 30 * 60 * 1000);
+    }
 
     (function () {
         const getContext = (textarea) => {
