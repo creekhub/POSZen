@@ -62,7 +62,8 @@
             <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
                 <div>
                     <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Sales overview</p>
-                    <h2 class="mt-1 text-2xl font-bold">{{ $chartPeriod }} sales</h2>
+                    <h2 class="mt-1 text-2xl font-bold">{{ $chartPeriod }} sales</h2>              
+                    <h4 class="mt-1 text-xl">₱{{number_format($salesAverage,2)}} Average {{ $averageLabel }}</h4>              
                     <p class="mt-1 text-sm text-slate-500">
                         ₱{{ number_format($salesChart['total'], 2) }} from {{ \Carbon\Carbon::parse($salesChart['startDate'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($salesChart['endDate'])->format('M j, Y') }}
                     </p>

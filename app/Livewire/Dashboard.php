@@ -298,6 +298,16 @@ class Dashboard extends Component
             $startingCashToday = (float) $startingCashEntries->sum(fn ($entry) => $entry->StartingCashType == 0 ? $entry->amount_value : -$entry->amount_value);
         }
 
+
+
+        $creditCollected = DB::table('Document as d')
+                        ->join('Payment as p', 'p.DocumentId', '=', 'd.Id')
+                        ->where('d.IsClockedOut', 1)
+                        ->whereDate('p.Date', $today)
+                        ->sum('p.amount');
+
+        $cashOnhand =  ((float) $creditCollected + (float) $todaySales + (float) $startingCashToday) - ((float) $todayDiscount  + (float) $todayReceivableTotal);
+
         $stats = [
             ['label' => 'Sales Today', 'value' => '₱'.number_format($todaySales, 2), 'trend' => $today->format('M j')],
             ['label' => 'Discount Today', 'value' => '₱'.number_format($todayDiscount, 2), 'trend' => $today->format('M j')],
@@ -305,6 +315,9 @@ class Dashboard extends Component
             ['label' => "Today's Receivables", 'value' => '₱'.number_format($todayReceivableTotal, 2), 'trend' => $today->format('M j')],
             ['label' => "Today's Profit", 'value' => '₱'.number_format($todayProfit, 2), 'trend' => $today->format('M j')],
             ['label' => 'Starting Cash', 'value' => '₱'.number_format($startingCashToday, 2), 'trend' => $today->format('M j')],
+            ['label' => 'Credit Collected', 'value' => '₱'.number_format($creditCollected, 2), 'trend' => $today->format('M j')],
+            ['label' => 'Cash Onhand', 'value' => '₱'.number_format($cashOnhand, 2), 'trend' => $today->format('M j')],
+
         ];
 
         $recentTransactions = DB::table('Document as document')
@@ -436,6 +449,15 @@ class Dashboard extends Component
             ]);
 
         $dueTasks = $tasks->filter(fn ($task) => Carbon::parse($task->DueDate)->isSameDay($today));
+        $salesAverage = $salesChart['total'] / max(1, count($salesChart['points']));
+
+         $averageLabel = [
+            'Daily' => 'Hourly',
+            'Weekly' => 'Daily',
+            'Monthly' => 'Daily',
+            'Yearly' => 'Monthly',
+        ];
+
 
         return view('livewire.dashboard', [
             'user' => $user,
@@ -454,6 +476,8 @@ class Dashboard extends Component
             'taskProducts' => $taskProducts,
             'tasks' => $tasks,
             'dueTasks' => $dueTasks,
+            'salesAverage' => $salesAverage,
+            'averageLabel' => $averageLabel[$this->chartPeriod],
 
         ]);
     }
@@ -466,6 +490,8 @@ class Dashboard extends Component
         if ($endDate->lessThan($startDate)) {
             [$startDate, $endDate] = [$endDate->copy()->startOfDay(), $startDate->copy()->endOfDay()];
         }
+
+
 
         $sales = DB::table('Document')
             ->where('DocumentTypeId', 2)
