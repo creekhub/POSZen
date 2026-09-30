@@ -252,6 +252,7 @@ class Dashboard extends Component
             ->selectRaw('document.Id, document.Total, COALESCE(SUM(CASE WHEN payment_type.MarkAsPaid = 1 AND LOWER(payment_type.Name) <> "credit" THEN payment.Amount ELSE 0 END), 0) as paid_amount')
             ->groupBy('document.Id', 'document.Total')
             ->get();
+            
 
         $receivableTotal = $receivableDocuments->sum(fn ($document) => max(0, (float) $document->Total - (float) $document->paid_amount));
 
