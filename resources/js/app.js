@@ -1,3 +1,5 @@
+import Chart from 'chart.js/auto';
+
 const printerCommands = {
 	init: Uint8Array.from([0x1b, 0x40]),
 	alignLeft: Uint8Array.from([0x1b, 0x61, 0x00]),
@@ -208,5 +210,132 @@ window.posHardware = new PosHardware();
 window.addEventListener('pos:open-cash-drawer', () => window.posHardware.openDrawer());
 
 document.addEventListener('livewire:init', () => {
+	const sizeTrendChartForLabels = (canvas, labelCount) => {
+		const chartContent = canvas.parentElement;
+		const scrollContainer = chartContent?.parentElement;
+
+		if (!chartContent || !scrollContainer) {
+			return;
+		}
+
+		chartContent.style.width = `${Math.max(scrollContainer.clientWidth, labelCount * 64)}px`;
+	};
+
+	const canvas = document.getElementById('product-sales-trend');
+	if (canvas) {
+		const colors = ['#059669', '#2563eb', '#e11d48', '#d97706', '#7c3aed', '#0891b2', '#4d7c0f', '#c026d3'];
+		const productTrendChart = new Chart(canvas, {
+			type: 'line',
+			data: {
+				labels: [],
+				datasets: [],
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				plugins: {
+					legend: { display: true, position: 'bottom' },
+					tooltip: {
+						callbacks: {
+							label: (context) => `${context.dataset.label}: ${Number(context.parsed.y || 0).toLocaleString('en-PH')} units`,
+						},
+					},
+				},
+				scales: {
+					x: {
+						grid: { display: false },
+						border: { display: false },
+						ticks: { maxRotation: 0, autoSkip: true },
+					},
+					y: {
+						type: 'linear',
+						beginAtZero: true,
+						grid: { color: 'rgba(148, 163, 184, 0.18)' },
+						border: { display: false },
+						title: { display: true, text: 'Quantity' },
+						ticks: { callback: (value) => Number(value).toLocaleString('en-PH') },
+					},
+				},
+			},
+		});
+
+		Livewire.on('product-report-updated', ({ labels, datasets }) => {
+			sizeTrendChartForLabels(canvas, labels.length);
+			productTrendChart.data.labels = labels;
+			productTrendChart.data.datasets = datasets.map((dataset, index) => ({
+				...dataset,
+				borderColor: colors[index % colors.length],
+				backgroundColor: colors[index % colors.length],
+				borderWidth: 2,
+				pointRadius: 2,
+				pointHoverRadius: 4,
+				tension: 0.25,
+				fill: false,
+			}));
+			productTrendChart.resize();
+			productTrendChart.update();
+		});
+	}
+
+	const profitCanvas = document.getElementById('product-profit-trend');
+	if (profitCanvas) {
+		const currency = new Intl.NumberFormat('en-PH', {
+			style: 'currency',
+			currency: 'PHP',
+			maximumFractionDigits: 0,
+		});
+		const profitTrendChart = new Chart(profitCanvas, {
+			type: 'line',
+			data: {
+				labels: [],
+				datasets: [{
+					label: 'Daily profit',
+					data: [],
+					borderColor: '#d97706',
+					backgroundColor: '#d97706',
+					borderWidth: 2,
+					pointRadius: 2,
+					pointHoverRadius: 4,
+					tension: 0.25,
+					fill: false,
+				}],
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				plugins: {
+					legend: { display: false },
+					tooltip: {
+						callbacks: {
+							label: (context) => currency.format(Number(context.parsed.y || 0)),
+						},
+					},
+				},
+				scales: {
+					x: {
+						grid: { display: false },
+						border: { display: false },
+						ticks: { maxRotation: 0, autoSkip: true },
+					},
+					y: {
+						type: 'linear',
+						beginAtZero: true,
+						grid: { color: 'rgba(148, 163, 184, 0.18)' },
+						border: { display: false },
+						ticks: { callback: (value) => currency.format(Number(value)) },
+					},
+				},
+			},
+		});
+
+		Livewire.on('product-report-updated', ({ profitLabels, profitValues }) => {
+			sizeTrendChartForLabels(profitCanvas, profitLabels.length);
+			profitTrendChart.data.labels = profitLabels;
+			profitTrendChart.data.datasets[0].data = profitValues;
+			profitTrendChart.resize();
+			profitTrendChart.update();
+		});
+	}
+
 	Livewire.on('pos-sale-completed', ({ receipt }) => window.posHardware.printReceipt(receipt));
 });

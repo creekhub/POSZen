@@ -82,6 +82,8 @@ class PosScreen extends Component
                 'product.Name as name',
                 'product.Code as code',
                 'product.Price as price',
+                'product.Cost as cost',
+                'product.LastPurchasePrice as last_purchase_price',
                 'product.IsService as is_service',
                 DB::raw('COALESCE(stock.Quantity, 0) as stock'),
             ])
@@ -93,6 +95,7 @@ class PosScreen extends Component
                 'name' => $item->name,
                 'code' => $item->code,
                 'price' => (float) $item->price,
+                'cost' => (float) ($item->cost ?: $item->last_purchase_price),
                 'stock' => (float) $item->stock,
                 'is_service' => (bool) $item->is_service,
             ])
@@ -222,6 +225,7 @@ class PosScreen extends Component
             'id' => $item['id'],
             'name' => $item['name'],
             'price' => $item['price'],
+            'product_cost' => $item['cost'],
             'is_service' => $item['is_service'],
             'quantity' => 1,
             'discount' => 0,
@@ -422,7 +426,7 @@ class PosScreen extends Component
                     'Price' => $item['price'],
                     'Discount' => $lineDiscount,
                     'DiscountType' => 0,
-                    'ProductCost' => 0,
+                    'ProductCost' => $item['product_cost'],
                     'PriceBeforeTaxAfterDiscount' => round($item['price'] * (1 - $discount / 100), 2),
                     'PriceAfterDiscount' => round($item['price'] * (1 - $discount / 100), 2),
                     'Total' => $lineTotal,
