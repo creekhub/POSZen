@@ -1,21 +1,10 @@
 <div class="min-h-screen bg-slate-100 p-6 text-slate-800">
     <div class="mx-auto max-w-7xl">
+        @include('livewire.partials.navigation')
         <header class="mb-8 flex items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <div>
                 <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Overview</p>
                 <h1 class="mt-1 text-3xl font-bold">Dashboard</h1>
-            </div>
-            <div class="flex items-center gap-4">
-                <span class="text-sm text-slate-500">Welcome, {{ trim(($user?->FirstName ?? '').' '.($user?->LastName ?? '')) ?: 'Admin' }}</span>
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
-                        Logout
-                    </button>
-                </form>
-                {{-- <a href="{{ route('pos') }}" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
-                    Open POS
-                </a> --}}
             </div>
         </header>
 
@@ -58,188 +47,6 @@
             </div>
         @endif
 
-        <section class="mt-8 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-                <div>
-                    <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Sales overview</p>
-                    <h2 class="mt-1 text-2xl font-bold">{{ $chartPeriod }} sales</h2>
-                    <h4 class="mt-1 text-xl">₱{{number_format($salesAverage,2)}} Average {{ $averageLabel }}</h4>
-                    <p class="mt-1 text-sm text-slate-500">
-                        ₱{{ number_format($salesChart['total'], 2) }} from {{ \Carbon\Carbon::parse($salesChart['startDate'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($salesChart['endDate'])->format('M j, Y') }}
-                    </p>
-                </div>
-
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <div>
-                        <label for="sales-period" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">View</label>
-                        <select id="sales-period" wire:model.live="chartPeriod" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 sm:w-32">
-                            <option value="Daily">Daily</option>
-                            <option value="Weekly">Weekly</option>
-                            <option value="Monthly">Monthly</option>
-                            <option value="Yearly">Yearly</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="sales-start-date" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">From</label>
-                        <input id="sales-start-date" type="date" wire:model.live="chartStartDate" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                    </div>
-                    <div>
-                        <label for="sales-end-date" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">To</label>
-                        <input id="sales-end-date" type="date" wire:model.live="chartEndDate" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-8 overflow-x-auto pb-2">
-                <div class="flex h-64 min-w-160 items-end gap-2 border-b border-l border-slate-200 px-3 pb-0 pt-6 sm:gap-3">
-                    @foreach ($salesChart['points'] as $point)
-                        <div class="group flex h-full min-w-6 flex-1 flex-col items-center justify-end gap-2" title="{{ $point['label'] }}: ₱{{ number_format($point['value'], 2) }}">
-                            <span class="text-[10px] font-semibold text-slate-600">₱{{ number_format($point['value'], 0) }}</span>
-                            <div class="w-full max-w-10 rounded-t-md bg-indigo-500 transition-colors group-hover:bg-indigo-700" style="height: {{ $point['height'] }}%"></div>
-                            <span class="whitespace-nowrap text-[10px] text-slate-500">{{ $point['label'] }}</span>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        </section>
-
-        <section class="mt-8 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <div>
-                <div>
-                    <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Product performance</p>
-                    <h2 class="mt-1 text-2xl font-bold">Product sales report</h2>
-                    <p class="mt-1 text-sm text-slate-500">Search for one or more products and set a date range.</p>
-                </div>
-            </div>
-
-            <div class="mt-5 grid gap-3 lg:grid-cols-[minmax(16rem,2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto] lg:items-end">
-                <div>
-                    <label for="product-report-search" class="mb-2 block text-sm font-medium text-slate-600">Products</label>
-                    <input id="product-report-search" type="search" wire:model.live.debounce.250ms="productSearch" autocomplete="off" placeholder="Search by product name or code..." class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                </div>
-                <div>
-                    <div>
-                        <label for="product-report-start" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">From</label>
-                        <input id="product-report-start" type="date" wire:model="productStartDate" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                    </div>
-                </div>
-                <div>
-                    <label for="product-report-end" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">To</label>
-                    <input id="product-report-end" type="date" wire:model="productEndDate" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                </div>
-                <button type="button" wire:click="searchProducts" wire:loading.attr="disabled" wire:target="searchProducts" class="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-wait disabled:opacity-60">
-                    <span wire:loading.remove wire:target="searchProducts">Search</span>
-                    <span wire:loading wire:target="searchProducts" role="status">Loading...</span>
-                </button>
-            </div>
-
-            @error('productStartDate') <p class="mt-2 text-sm text-rose-600">{{ $message }}</p> @enderror
-            @error('productEndDate') <p class="mt-2 text-sm text-rose-600">{{ $message }}</p> @enderror
-            @error('selectedProductIds.*') <p class="mt-2 text-sm text-rose-600">{{ $message }}</p> @enderror
-
-            @if ($productSuggestions !== [])
-                <div class="mt-4 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white">
-                    @foreach ($productSuggestions as $productSuggestion)
-                        <button type="button" wire:key="product-report-suggestion-{{ $productSuggestion['Id'] }}" wire:click="addProductToSearch({{ $productSuggestion['Id'] }})" class="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50">
-                            <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{{ $productSuggestion['Name'] }}</span>
-                            <span class="text-xs text-slate-400">{{ $productSuggestion['Code'] }}</span>
-                            <span class="text-xs font-semibold text-indigo-700">Add</span>
-                        </button>
-                    @endforeach
-                </div>
-            @elseif (mb_strlen(trim($productSearch)) >= 2)
-                <p class="mt-3 text-sm text-slate-500">No matching products found.</p>
-            @endif
-
-            @if ($selectedProductNames !== [])
-                <div class="mt-4 flex flex-wrap gap-2" aria-label="Selected products">
-                    @foreach ($selectedProductNames as $selectedProduct)
-                        <span wire:key="selected-report-product-{{ $selectedProduct['Id'] }}" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 py-1 pl-3 pr-1 text-sm font-medium text-slate-700">
-                            {{ $selectedProduct['Name'] }}
-                            <button type="button" wire:click="removeProductFromSearch({{ $selectedProduct['Id'] }})" aria-label="Remove {{ $selectedProduct['Name'] }}" class="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900">&times;</button>
-                        </span>
-                    @endforeach
-                </div>
-            @endif
-
-            <p wire:loading wire:target="searchProducts" role="status" aria-live="polite" class="mt-6 rounded-lg bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-800">
-                Updating Product details, Sales trend, and Profit trend...
-            </p>
-
-            <div wire:loading.class="opacity-60" wire:target="searchProducts" class="mt-6 space-y-8 transition-opacity" aria-live="polite">
-                <div class="min-w-0">
-                    <h3 class="text-lg font-bold">Product details</h3>
-                    <div class="mt-3 overflow-x-auto">
-                        <table class="w-full min-w-155 text-left text-sm">
-                            <thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                                <tr>
-                                    <th class="py-3 pr-3 font-semibold">Product name</th>
-                                    <th class="px-3 py-3 text-right font-semibold">Total quantity</th>
-                                    <th class="px-3 py-3 text-right font-semibold">Total amount</th>
-                                    <th class="px-3 py-3 text-right font-semibold">Total profit</th>
-                                    <th class="py-3 pl-3 text-right font-semibold">Total discount</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                                @forelse ($productReport['products'] as $product)
-                                    <tr>
-                                        <td class="py-3 pr-3 font-medium text-slate-800">{{ $product['product_name'] }}</td>
-                                        <td class="px-3 py-3 text-right tabular-nums">{{ rtrim(rtrim(number_format((float) $product['total_quantity'], 2), '0'), '.') }}</td>
-                                        <td class="px-3 py-3 text-right tabular-nums">₱{{ number_format((float) $product['total_amount'], 2) }}</td>
-                                        <td class="px-3 py-3 text-right tabular-nums">₱{{ number_format((float) $product['total_profit'], 2) }}</td>
-                                        <td class="py-3 pl-3 text-right tabular-nums">₱{{ number_format((float) $product['total_discount'], 2) }}</td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="5" class="py-8 text-center text-sm text-slate-500">
-                                            {{ empty($productReport['selectedProducts']) ? 'Search for products to view their sales.' : 'No sales found for these products and dates.' }}
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                            @if (!empty($productReport['products']))
-                                <tfoot class="border-t border-slate-200 font-semibold text-slate-800">
-                                    <tr>
-                                        <td class="py-3 pr-3">Selected total</td>
-                                        <td class="px-3 py-3 text-right tabular-nums">{{ rtrim(rtrim(number_format((float) $productReport['totalQuantity'], 2), '0'), '.') }}</td>
-                                        <td class="px-3 py-3 text-right tabular-nums">₱{{ number_format((float) $productReport['totalAmount'], 2) }}</td>
-                                        <td class="px-3 py-3 text-right tabular-nums">₱{{ number_format((float) $productReport['totalProfit'], 2) }}</td>
-                                        <td class="py-3 pl-3 text-right tabular-nums">₱{{ number_format((float) $productReport['totalDiscount'], 2) }}</td>
-                                    </tr>
-                                </tfoot>
-                            @endif
-                        </table>
-                    </div>
-                </div>
-
-                <div class="min-w-0">
-                    <div class="flex items-baseline justify-between gap-3">
-                        <h3 class="text-lg font-bold">Sales trend</h3>
-                        <span class="text-xs text-slate-500">{{ rtrim(rtrim(number_format((float) $productReport['totalQuantity'], 2), '0'), '.') }} units total</span>
-                    </div>
-                    <p class="mt-1 text-xs text-slate-500">Daily quantity by product, {{ \Carbon\Carbon::parse($productReport['startDate'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($productReport['endDate'])->format('M j, Y') }}</p>
-                    <div data-trend-scroll wire:ignore class="mt-3 w-full overflow-x-auto pb-2">
-                        <div data-trend-chart-content class="relative h-64 min-w-full">
-                            <canvas id="product-sales-trend" class="block h-full w-full" role="img" aria-label="Daily quantity trend for each selected product"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="min-w-0 border-t border-slate-200 pt-6">
-                    <div class="flex items-baseline justify-between gap-3">
-                        <h3 class="text-lg font-bold">Profit trend</h3>
-                        <span class="text-xs text-slate-500">Date range only</span>
-                    </div>
-                    <p class="mt-1 text-xs text-slate-500">Daily total profit across all products, {{ \Carbon\Carbon::parse($productReport['startDate'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($productReport['endDate'])->format('M j, Y') }}</p>
-                    <div data-trend-scroll wire:ignore class="mt-3 w-full overflow-x-auto pb-2">
-                        <div data-trend-chart-content class="relative h-64 min-w-full">
-                            <canvas id="product-profit-trend" class="block h-full w-full" role="img" aria-label="Daily total profit across all products in the selected date range"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <section class="mt-8 grid gap-6 md:grid-cols-2">
             <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
                 <h3 class="mb-4 text-xl font-bold">Recent Transactions</h3>
@@ -249,9 +56,7 @@
                             <summary class="flex cursor-pointer list-none items-center justify-between gap-4">
                                 <div>
                                     <p class="font-semibold">{{ $transaction->Number }}</p>
-                                    <p class="text-sm text-slate-500">
-                                        {{ $transaction->payment_type ?? 'Unpaid' }} · {{ $transaction->customer_name ?? 'Walk-in customer' }} · {{ \Carbon\Carbon::parse($transaction->Date)->format('M j, Y') }}
-                                    </p>
+                                    <p class="text-sm text-slate-500">{{ $transaction->payment_type ?? 'Unpaid' }} · {{ $transaction->customer_name ?? 'Walk-in customer' }} · {{ \Carbon\Carbon::parse($transaction->Date)->format('M j, Y') }}</p>
                                 </div>
                                 <span class="shrink-0 font-bold text-slate-700">₱{{ number_format($transaction->Total, 2) }}</span>
                             </summary>
@@ -260,13 +65,7 @@
                                     @forelse ($transaction->items as $item)
                                         <div class="flex items-center justify-between gap-2 text-sm text-slate-600">
                                             <span class="min-w-0 truncate">{{ $item->product_name }} <span class="text-slate-400">× {{ rtrim(rtrim(number_format($item->Quantity, 2), '0'), '.') }}</span></span>
-                                            <span class="shrink-0 text-right">
-                                                ₱{{ number_format($item->Price, 2) }}
-                                                @if ((float) $item->Discount > 0)
-                                                    <span class="text-rose-600">· -₱{{ number_format($item->Discount, 2) }}</span>
-                                                @endif
-                                                <span class="font-medium text-slate-700">· ₱{{ number_format($item->Total, 2) }}</span>
-                                            </span>
+                                            <span class="shrink-0 text-right">₱{{ number_format($item->Price, 2) }} @if ((float) $item->Discount > 0)<span class="text-rose-600">· -₱{{ number_format($item->Discount, 2) }}</span>@endif <span class="font-medium text-slate-700">· ₱{{ number_format($item->Total, 2) }}</span></span>
                                         </div>
                                     @empty
                                         <p class="text-sm text-slate-500">No product details available.</p>
@@ -287,14 +86,10 @@
                         <div class="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
                             <div>
                                 <p class="font-semibold">{{ $entry->type_label ?? 'Starting Cash' }}</p>
-                                <p class="text-sm text-slate-500">
-                                    {{ \Carbon\Carbon::parse($entry->DateCreated)->format('M j, Y g:i A') }}
-                                </p>
+                                <p class="text-sm text-slate-500">{{ \Carbon\Carbon::parse($entry->DateCreated)->format('M j, Y g:i A') }}</p>
                                 <p class="mt-1 text-xs text-slate-500">{{ $entry->description ?? 'No description' }}</p>
                             </div>
-                            <span class="font-bold {{ $entry->StartingCashType == 0 ? 'text-emerald-700' : 'text-rose-700' }}">
-                                {{ $entry->StartingCashType == 0 ? '' : '-' }}₱{{ number_format((float) ($entry->Amount ?? 0), 2) }}
-                            </span>
+                            <span class="font-bold {{ $entry->StartingCashType == 0 ? 'text-emerald-700' : 'text-rose-700' }}">{{ $entry->StartingCashType == 0 ? '' : '-' }}₱{{ number_format((float) ($entry->Amount ?? 0), 2) }}</span>
                         </div>
                     @empty
                         <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No starting cash entries recorded for today.</p>
@@ -364,11 +159,20 @@
                         <div class="flex items-start justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3">
                             @if ($editingTaskId === (int) $task->Id)
                                 <form wire:submit.prevent="updateTask" class="w-full space-y-3">
-                                    <input wire:model="editTaskTitle" type="text" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    <div>
+                                        <label for="edit-task-title-{{ $task->Id }}" class="mb-1 block text-xs font-medium text-slate-600">Title</label>
+                                        <input id="edit-task-title-{{ $task->Id }}" wire:model="editTaskTitle" type="text" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    </div>
                                     @error('editTaskTitle') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
-                                    <textarea wire:model="editTaskDescription" rows="2" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"></textarea>
+                                    <div>
+                                        <label for="edit-task-notes-{{ $task->Id }}" class="mb-1 block text-xs font-medium text-slate-600">Notes</label>
+                                        <textarea id="edit-task-notes-{{ $task->Id }}" wire:model="editTaskDescription" rows="2" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"></textarea>
+                                    </div>
                                     @error('editTaskDescription') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
-                                    <input wire:model="editTaskDueDate" type="date" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    <div>
+                                        <label for="edit-task-due-date-{{ $task->Id }}" class="mb-1 block text-xs font-medium text-slate-600">Due date</label>
+                                        <input id="edit-task-due-date-{{ $task->Id }}" wire:model="editTaskDueDate" type="date" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    </div>
                                     @error('editTaskDueDate') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
                                     <div class="flex gap-2">
                                         <button type="button" wire:click="updateTask" wire:loading.attr="disabled" wire:target="updateTask" class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Save changes</button>
@@ -381,7 +185,7 @@
                                     <p class="mt-1 text-sm {{ \Carbon\Carbon::parse($task->DueDate)->lessThanOrEqualTo(\Carbon\Carbon::today()) ? 'font-semibold text-amber-700' : 'text-slate-500' }}">{{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
                                     <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
                                     @if ($task->Description)
-                                        <p class="mt-2 text-sm text-slate-600">{{ $task->Description }}</p>
+                                        <p class="mt-2 whitespace-pre-line wrap-break-word text-sm text-slate-600">{{ $task->Description }}</p>
                                     @endif
                                 </div>
                                 <div class="flex shrink-0 items-start gap-2">
@@ -398,338 +202,12 @@
                 </div>
             </div>
         </section>
-
-        <section id="state-of-account" class="mt-8 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <div class="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-                <div>
-                    <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Receivables</p>
-                    <h2 class="mt-1 text-2xl font-bold">State of Account</h2>
-                    <p class="mt-1 text-sm text-slate-500">Unpaid sales for the selected customer.</p>
-                    <p id="soa-print-customer" class="mt-1">Customer: {{ $accountCustomer?->Name ?? 'No customer selected' }}</p>
-                </div>
-
-                <div id="soa-controls" class="flex w-full flex-col gap-3 sm:flex-row md:w-auto">
-                    <div class="w-full sm:w-64">
-                        <label for="account-customer" class="mb-2 block text-sm font-medium text-slate-600">Customer</label>
-                        <input id="account-customer" list="account-customer-options" wire:model.live="accountCustomerSearch" type="search" placeholder="Type customer name..." class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" autocomplete="off">
-                        <datalist id="account-customer-options">
-                            @forelse ($accountCustomers as $customer)
-                                <option value="{{ $customer->Name }}"></option>
-                            @empty
-                                <option value="No customers with unpaid sales"></option>
-                            @endforelse
-                        </datalist>
-                    </div>
-                    <button type="button" onclick="window.printStateOfAccount()" class="self-end rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
-                        Print SOA
-                    </button>
-                </div>
-            </div>
-
-            <div id="soa-summary" class="mt-6 grid gap-4 md:grid-cols-3">
-                <div class="rounded-xl bg-slate-100 p-4">
-                    <p class="text-sm text-slate-600">Grand Total</p>
-                    <p class="mt-1 text-2xl font-bold text-slate-950">₱{{ number_format($accountGrandTotal, 2) }}</p>
-                </div>
-                <div class="rounded-xl bg-emerald-50 p-4">
-                    <p class="text-sm text-emerald-700">Total Payment</p>
-                    <p class="mt-1 text-2xl font-bold text-emerald-950">₱{{ number_format($accountTotalPayment, 2) }}</p>
-                </div>
-                <div class="rounded-xl bg-rose-50 p-4">
-                    <p class="text-sm text-rose-700">Grand Outstanding Balance</p>
-                    <p class="mt-1 text-2xl font-bold text-rose-950">₱{{ number_format($accountBalance, 2) }}</p>
-                </div>
-            </div>
-
-            <div class="mt-6 overflow-x-auto">
-                <table id="soa-table" class="w-full min-w-160 text-left text-sm">
-                    <thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                        <tr>
-                            <th class="px-3 py-3 font-medium"><span class="soa-screen-header">Document</span><span class="soa-print-header">#</span></th>
-                            <th class="px-3 py-3 font-medium"><span class="soa-screen-header">Sale Date</span><span class="soa-print-header">Date</span></th>
-                            <th class="px-3 py-3 text-right font-medium">Payment</th>
-                            <th class="px-3 py-3 text-right font-medium"><span class="soa-screen-header">Amount Due</span><span class="soa-print-header">Due</span></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @forelse ($unpaidSales as $sale)
-                            <tr class="bg-slate-50/70">
-                                <td class="px-3 py-3 align-top font-semibold text-slate-800">{{ $sale->Number }}</td>
-                                <td class="px-3 py-3 align-top text-slate-600">{{ \Carbon\Carbon::parse($sale->Date)->format('M j, Y') }}</td>
-                                <td class="px-3 py-3 align-top text-right font-semibold text-emerald-700">
-                                    @if ((float) $sale->paid_amount > 0)
-                                        ₱{{ number_format($sale->paid_amount, 2) }}
-                                    @endif
-                                </td>
-                                <td class="px-3 py-3 align-top text-right font-semibold text-rose-700">₱{{ number_format($sale->balance, 2) }}</td>
-                            </tr>
-                            <tr>
-                                <td colspan="4" class="px-3 pb-4 pt-0">
-                                    <div class="ml-4 border-l-2 border-slate-200 pl-4">
-                                        <div class="space-y-1">
-                                            @foreach ($sale->items as $item)
-                                                <div class="flex items-center justify-between gap-2 text-sm text-slate-600">
-                                                    <span class="min-w-0 truncate">{{ $item->product_name }} <span class="text-slate-400">× {{ rtrim(rtrim(number_format($item->Quantity, 2), '0'), '.') }}</span></span>
-                                                    <span class="shrink-0 text-right">
-                                                        ₱{{ number_format($item->Price, 2) }}
-                                                        @if ((float) $item->Discount > 0)
-                                                            <span class="text-rose-600">· -₱{{ number_format($item->Discount, 2) }}</span>
-                                                        @endif
-                                                        <span class="font-medium text-slate-700">· ₱{{ number_format($item->Total, 2) }}</span>
-                                                    </span>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="px-3 py-8 text-center text-slate-500">This customer has no unpaid sales.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                    <tfoot class="border-t-2 border-slate-300">
-                        <tr>
-                            <td colspan="3" class="px-3 py-2 text-right text-base font-bold text-slate-800">Grand Total</td>
-                            <td class="px-3 py-2 text-right text-base font-bold text-slate-800">₱{{ number_format($accountGrandTotal, 2) }}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="3" class="px-3 py-2 text-right text-base font-bold text-slate-800">Total Payment</td>
-                            <td class="px-3 py-2 text-right text-base font-bold text-emerald-700">₱{{ number_format($accountTotalPayment, 2) }}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="3" class="px-3 py-2 text-right text-base font-bold text-slate-800">Outstanding Balance</td>
-                            <td class="px-3 py-2 text-right text-base font-bold text-rose-700">₱{{ number_format($accountBalance, 2) }}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </section>
     </div>
-</div>
-
-<style>
-    @page {
-        size: 65mm auto;
-        margin: 0;
-    }
-
-    .soa-print-header {
-        display: none;
-    }
-
-    @media print {
-        html,
-        body {
-            width: 65mm;
-            min-width: 65mm;
-            height: auto;
-            min-height: 0;
-            margin: 0;
-            padding: 0;
-            background: #fff;
-        }
-
-        body > div,
-        body > div > div,
-        .min-h-screen,
-        .min-h-screen > .mx-auto {
-            width: 65mm;
-            min-width: 65mm;
-            height: auto !important;
-            min-height: 0 !important;
-            margin: 0;
-            padding: 0;
-        }
-
-        body * {
-            visibility: hidden;
-        }
-
-        #state-of-account,
-        #state-of-account * {
-            visibility: visible;
-            color: #000 !important;
-            border-color: #000 !important;
-        }
-
-        #state-of-account {
-            position: absolute;
-            top: 0;
-            left: 0;
-            margin: 0 !important;
-            width: 65mm;
-            min-width: 65mm;
-            padding: 2mm;
-            box-sizing: border-box;
-            border: 0;
-            border-radius: 0;
-            box-shadow: none;
-            color: #000;
-            font-size: 10.6pt;
-        }
-
-        #soa-controls,
-        #account-customer,
-        #soa-summary,
-        #state-of-account .overflow-x-auto {
-            display: none;
-        }
-
-        #state-of-account > div:first-child {
-            display: block;
-            margin: 0 0 3mm;
-            text-align: center;
-        }
-
-        #state-of-account > div:first-child > div:first-child p {
-            margin: 0;
-            color: #000;
-            font-size: 8.24pt;
-            letter-spacing: 0.12em;
-        }
-
-        #state-of-account h2 {
-            margin: 1mm 0 0;
-            font-size: 16.47pt;
-        }
-
-        #state-of-account > div:first-child > div:first-child p:nth-of-type(2) {
-            margin-top: 1mm;
-            color: #000;
-            font-size: 9.41pt;
-        }
-
-        #soa-print-customer {
-            display: block;
-            margin-top: 1mm;
-            color: #000;
-            font-size: 9.41pt;
-            font-weight: 700;
-        }
-
-        #state-of-account > .mt-6.overflow-x-auto {
-            display: block;
-            margin: 0;
-            overflow: visible;
-            width: 100%;
-        }
-
-        #soa-table {
-            display: table;
-            width: 100%;
-            min-width: 0;
-            table-layout: fixed;
-            border-collapse: collapse;
-            font-size: 8.24pt;
-        }
-
-        #soa-table th,
-        #soa-table td {
-            padding: 1.5mm 0.5mm;
-            color: #000;
-            vertical-align: top;
-            overflow-wrap: anywhere;
-        }
-
-        #soa-table th:nth-child(1),
-        #soa-table td:nth-child(1) {
-            width: 27%;
-        }
-
-        #soa-table th:nth-child(2),
-        #soa-table td:nth-child(2) {
-            width: 23%;
-        }
-
-        #soa-table th:nth-child(3),
-        #soa-table td:nth-child(3),
-        #soa-table th:nth-child(4),
-        #soa-table td:nth-child(4) {
-            width: 25%;
-        }
-
-        .soa-screen-header {
-            display: none;
-        }
-
-        .soa-print-header {
-            display: inline;
-        }
-
-        #soa-table thead {
-            border-bottom: 1px solid #000;
-        }
-
-        #soa-table thead th {
-            font-size: 7.06pt;
-            font-weight: 700;
-            letter-spacing: 0;
-        }
-
-        #soa-table tbody tr.bg-slate-50\/70 {
-            background: transparent;
-        }
-
-        #soa-table tbody tr:nth-child(2n) {
-            border-bottom: 1px dashed #000;
-        }
-
-        #soa-table tbody tr:nth-child(2n) td {
-            padding-top: 0;
-            padding-bottom: 2mm;
-        }
-
-        #soa-table tbody tr:nth-child(2n) td > div {
-            margin-left: 0;
-            padding-left: 0;
-            border-left: 0;
-        }
-
-        #soa-table tbody tr:nth-child(2n) p {
-            margin-bottom: 1mm;
-            color: #000;
-            font-size: 7.06pt;
-        }
-
-        #soa-table tbody tr:nth-child(2n) .space-y-1 > div {
-            font-size: 8.65pt;
-        }
-
-        #soa-table tfoot {
-            display: table-row-group;
-            border-top: 1px solid #000;
-            break-inside: avoid;
-        }
-
-        #soa-table tfoot td {
-            padding-top: 2mm;
-            font-size: 9.41pt;
-            font-weight: 700;
-        }
-
-        #soa-table .text-right {
-            text-align: right;
-        }
-
-        #state-of-account button,
-        #state-of-account input,
-        #state-of-account label,
-        #state-of-account datalist {
-            display: none;
-        }
-    }
-</style>
 
 <script>
     window.taskMentionData = {
         products: @json($taskProducts->map(fn ($product) => ['name' => $product->Name])->values()),
         customers: @json($taskCustomers->map(fn ($customer) => ['name' => $customer->Name])->values()),
-    };
-
-    window.printStateOfAccount = function () {
-        window.print();
     };
 
     const syncTaskReminderBodyLock = () => {
@@ -880,3 +358,4 @@
         });
     });
 </script>
+</div>

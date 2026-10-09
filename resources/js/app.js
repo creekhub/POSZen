@@ -328,10 +328,20 @@ document.addEventListener('livewire:init', () => {
 			},
 		});
 
-		Livewire.on('product-report-updated', ({ profitLabels, profitValues }) => {
+		const profitSummary = document.getElementById('product-profit-total');
+
+		Livewire.on('product-report-updated', ({ profitLabels, profitValues, profitTotal: totalProfit }) => {
 			sizeTrendChartForLabels(profitCanvas, profitLabels.length);
 			profitTrendChart.data.labels = profitLabels;
 			profitTrendChart.data.datasets[0].data = profitValues;
+			if (profitSummary) {
+				profitSummary.textContent = new Intl.NumberFormat('en-PH', {
+					style: 'currency',
+					currency: 'PHP',
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2,
+				}).format(Number(totalProfit || 0));
+			}
 			profitTrendChart.resize();
 			profitTrendChart.update();
 		});
