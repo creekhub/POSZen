@@ -38,7 +38,7 @@
                 </table>
             </div>
 
-            <div class="mt-4">{{ $products->links() }}</div>
+            <div class="mt-4">{{ $products->links(data: ['scrollTo' => false]) }}</div>
         </section>
     </div>
 </div>

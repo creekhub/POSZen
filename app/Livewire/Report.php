@@ -71,6 +71,14 @@ class Report extends Component
             ->select('product.Id', 'product.Name', 'product.Code')
             ->selectRaw('COALESCE(SUM(item.Quantity), 0) as quantity_sold')
             ->selectRaw('COALESCE(SUM(COALESCE(item.TotalAfterDocumentDiscount, item.Total, item.PriceAfterDiscount * item.Quantity)), 0) as sales_total')
+            ->selectRaw('COALESCE(SUM(
+                case
+                    when item.ProductCost is not null then
+                        (item.PriceAfterDiscount - item.ProductCost) * item.Quantity
+                    else
+                        0
+                end
+            ), 0) as profit')
             ->groupBy('product.Id', 'product.Name', 'product.Code')
             ->orderByDesc('quantity_sold')
             ->limit(10)

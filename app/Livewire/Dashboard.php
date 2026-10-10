@@ -183,15 +183,18 @@ class Dashboard extends Component
 
         $todaySales = (clone $sales)
             ->whereDate('Date', $today)
+            ->where('IsClockedOut', 0)
             ->sum('Total');
 
         $todayOrderDiscount = (clone $sales)
             ->whereDate('Date', $today)
+            ->where('IsClockedOut', 0)
             ->sum('Discount');
 
         $todayItemDiscount = DB::table('DocumentItem as item')
             ->join('Document as document', 'document.Id', '=', 'item.DocumentId')
             ->where('document.DocumentTypeId', 2)
+            ->where('document.IsClockedOut', 0)
             ->whereDate('document.Date', $today)
             ->sum('item.Discount');
 
@@ -202,6 +205,7 @@ class Dashboard extends Component
             ->leftJoin('PaymentType as payment_type', 'payment_type.Id', '=', 'payment.PaymentTypeId')
             ->where('document.DocumentTypeId', 2)
             ->where('document.PaidStatus', 1)
+            ->where('document.IsClockedOut', 0)
             ->selectRaw('document.Id, document.Total, COALESCE(SUM(CASE WHEN payment_type.MarkAsPaid = 1 AND LOWER(payment_type.Name) <> "credit" THEN payment.Amount ELSE 0 END), 0) as paid_amount')
             ->groupBy('document.Id', 'document.Total')
             ->get();
@@ -214,6 +218,7 @@ class Dashboard extends Component
             ->leftJoin('PaymentType as payment_type', 'payment_type.Id', '=', 'payment.PaymentTypeId')
             ->where('document.DocumentTypeId', 2)
             ->where('document.PaidStatus', 1)
+            ->where('document.IsClockedOut', 0)
             ->whereDate('document.Date', $today)
             ->selectRaw('document.Id, document.Total, COALESCE(SUM(CASE WHEN payment_type.MarkAsPaid = 1 AND LOWER(payment_type.Name) <> "credit" THEN payment.Amount ELSE 0 END), 0) as paid_amount')
             ->groupBy('document.Id', 'document.Total')
@@ -226,6 +231,7 @@ class Dashboard extends Component
             ->where('document.DocumentTypeId', 2)
             ->whereDate('document.Date', $today)
             ->whereNotNull('item.ProductCost')
+            ->where('document.IsClockedOut', 0)
             ->where('item.ProductCost', '>', 0)
             ->selectRaw('COALESCE(SUM((item.PriceAfterDiscount - item.ProductCost) * item.Quantity), 0) as profit')
             ->value('profit');
@@ -236,6 +242,7 @@ class Dashboard extends Component
         if (DB::getSchemaBuilder()->hasTable('StartingCash')) {
             $startingCashEntries = DB::table('StartingCash')
                 ->whereDate('DateCreated', $today)
+                ->whereNull('ZReportNumber')
                 ->orderByDesc('DateCreated')
                 ->get()
                 ->map(function ($entry) {

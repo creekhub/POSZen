@@ -52,6 +52,7 @@
                             <th class="px-3 py-3 font-semibold">Product</th>
                             <th class="px-3 py-3 text-right font-semibold">Units sold</th>
                             <th class="px-3 py-3 text-right font-semibold">Sales</th>
+                            <th class="px-3 py-3 text-right font-semibold">Profit</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -61,6 +62,7 @@
                                 <td class="px-3 py-3 font-medium">{{ $product->Name }}</td>
                                 <td class="px-3 py-3 text-right tabular-nums">{{ rtrim(rtrim(number_format((float) $product->quantity_sold, 2), '0'), '.') }}</td>
                                 <td class="px-3 py-3 text-right tabular-nums">₱{{ number_format((float) $product->sales_total, 2) }}</td>
+                                <td class="px-3 py-3 text-right tabular-nums">₱{{ number_format((float) $product->profit, 2) }}</td>
                             </tr>
                         @empty
                             <tr><td colspan="4" class="px-3 py-8 text-center text-slate-500">No product sales for this date range.</td></tr>
@@ -96,7 +98,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="mt-4">{{ $sales->links() }}</div>
+            <div class="mt-4">{{ $sales->links(data: ['scrollTo' => false]) }}</div>
         </section>
 
     </div>
