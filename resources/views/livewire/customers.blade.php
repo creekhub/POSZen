@@ -20,13 +20,14 @@
                 <table class="w-full min-w-240 text-left text-sm">
                     <thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                         <tr>
-                            <th class="px-3 py-3 font-semibold">Code</th>
-                            <th class="px-3 py-3 font-semibold">Name</th>
-                            <th class="px-3 py-3 font-semibold">Email</th>
-                            <th class="px-3 py-3 font-semibold">Phone</th>
-                            <th class="px-3 py-3 font-semibold">City</th>
-                            <th class="px-3 py-3 font-semibold">Status</th>
-                            <th class="px-3 py-3 text-right font-semibold">Outstanding</th>
+                            <th aria-sort="{{ $sortField === 'Code' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('Code')" class="inline-flex items-center gap-2">Code<i class="fa-solid {{ $sortField === 'Code' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'Name' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('Name')" class="inline-flex items-center gap-2">Name<i class="fa-solid {{ $sortField === 'Name' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'Email' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('Email')" class="inline-flex items-center gap-2">Email<i class="fa-solid {{ $sortField === 'Email' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'PhoneNumber' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('PhoneNumber')" class="inline-flex items-center gap-2">Phone<i class="fa-solid {{ $sortField === 'PhoneNumber' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'City' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('City')" class="inline-flex items-center gap-2">City<i class="fa-solid {{ $sortField === 'City' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'IsEnabled' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('IsEnabled')" class="inline-flex items-center gap-2">Status<i class="fa-solid {{ $sortField === 'IsEnabled' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'Outstanding' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 text-right font-semibold"><button type="button" wire:click="sortBy('Outstanding')" class="inline-flex items-center gap-2">Outstanding<i class="fa-solid {{ $sortField === 'Outstanding' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'LoyaltyCardPoints' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 text-right font-semibold"><button type="button" wire:click="sortBy('LoyaltyCardPoints')" class="inline-flex items-center gap-2">Loyalty Points<i class="fa-solid {{ $sortField === 'LoyaltyCardPoints' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
                             <th class="px-3 py-3 text-right font-semibold">Action</th>
                         </tr>
                     </thead>
@@ -40,6 +41,7 @@
                                 <td class="px-3 py-3">{{ $customer->City ?: '-' }}</td>
                                 <td class="px-3 py-3 {{ $customer->IsEnabled ? 'text-emerald-700' : 'text-slate-500' }}">{{ $customer->IsEnabled ? 'Enabled' : 'Disabled' }}</td>
                                 <td class="px-3 py-3 text-right tabular-nums {{ $customer->outstanding_balance > 0 ? 'font-semibold text-rose-700' : 'text-slate-500' }}">₱{{ number_format($customer->outstanding_balance, 2) }}</td>
+                                <td class="px-3 py-3 text-right tabular-nums {{ $customer->LoyaltyCardPoints > 0 ? 'font-semibold text-emerald-700' : 'text-slate-500' }}">₱{{ number_format($customer->LoyaltyCardPoints, 2) }}</td>
                                 <td class="px-3 py-3">
                                     <div class="flex justify-end gap-2">
                                         <button type="button" wire:click="editCustomer({{ $customer->Id }})" aria-label="Edit {{ $customer->Name }}" title="Edit customer" class="inline-flex size-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">

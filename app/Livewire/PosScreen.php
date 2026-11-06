@@ -447,22 +447,18 @@ class PosScreen extends Component
                 }
             }
 
-            foreach ($payments as $payment) {
-                DB::table('Payment')->insert([
-                    'DocumentId' => $documentId,
-                    'PaymentTypeId' => $payment['payment_type_id'],
-                    'Amount' => $payment['amount'],
-                    'Date' => $now->toDateString(),
-                    'UserId' => Auth::id(),
-                    'DateCreated' => $now,
-                    'RoundingAdjustment' => 0,
-                ]);
-            }
+            $loyaltyPointsEarned = $this->recordPayments(
+                $payments,
+                $documentId,
+                $number,
+                $now,
+            );
 
             return [
                 'id' => $documentId,
                 'number' => $number,
                 'date' => $now->format('Y-m-d H:i'),
+                'loyaltyPointsEarned' => $loyaltyPointsEarned,
             ];
         });
 
@@ -493,7 +489,30 @@ class PosScreen extends Component
         $this->tenderedAmount = '';
         $this->paymentAllocations = [];
         $this->splitPayment = false;
-        $this->message = 'Payment completed successfully.';
+        $this->message = $receipt['loyaltyPointsEarned'] > 0
+            ? 'Payment completed successfully. Earned '.number_format($receipt['loyaltyPointsEarned'], 2).' loyalty points.'
+            : 'Payment completed successfully.';
+    }
+
+    private function recordPayments($payments, int $documentId, string $documentNumber, $now): float
+    {
+        foreach ($payments as $payment) {
+            DB::table('Payment')->insert([
+                'DocumentId' => $documentId,
+                'PaymentTypeId' => $payment['payment_type_id'],
+                'Amount' => $payment['amount'],
+                'Date' => $now->toDateString(),
+                'UserId' => Auth::id(),
+                'DateCreated' => $now,
+                'RoundingAdjustment' => 0,
+            ]);
+        }
+
+        return app(\App\Services\LoyaltyPointAwarder::class)->awardForCustomer(
+            (int) ($this->selectedCustomerId ?: 1),
+            $documentNumber,
+            $payments,
+        );
     }
 
     public function getSubtotalProperty(): float

@@ -135,8 +135,10 @@
                         </div>
                     </div>
                     <div class="relative" data-task-mentions>
-                        <label for="task-description" class="mb-2 block text-sm font-medium text-slate-600">Notes</label>
-                        <textarea id="task-description" wire:model="taskDescription" rows="3" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Type / for products or @ for customers"></textarea>
+                        <label for="task-description-editor" class="mb-2 block text-sm font-medium text-slate-600">Notes</label>
+                        <div class="task-editor rounded-xl border border-slate-300 bg-white" data-task-editor-container data-livewire-property="taskDescription" data-initial-content="{{ $taskDescription }}">
+                            <div id="task-description-editor" data-task-editor wire:ignore hidden aria-label="Task notes"></div>
+                        </div>
                         <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"></div>
                     </div>
                     @if ($taskMessage)
@@ -166,7 +168,9 @@
                                     @error('editTaskTitle') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
                                     <div>
                                         <label for="edit-task-notes-{{ $task->Id }}" class="mb-1 block text-xs font-medium text-slate-600">Notes</label>
-                                        <textarea id="edit-task-notes-{{ $task->Id }}" wire:model="editTaskDescription" rows="2" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"></textarea>
+                                        <div class="task-editor rounded-lg border border-slate-300 bg-white" data-task-editor-container data-livewire-property="editTaskDescription" data-initial-content="{{ $editTaskDescription }}">
+                                            <div id="edit-task-notes-editor-{{ $task->Id }}" data-task-editor wire:ignore hidden aria-label="Task notes"></div>
+                                        </div>
                                     </div>
                                     @error('editTaskDescription') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
                                     <div>
@@ -185,7 +189,7 @@
                                     <p class="mt-1 text-sm {{ \Carbon\Carbon::parse($task->DueDate)->lessThanOrEqualTo(\Carbon\Carbon::today()) ? 'font-semibold text-amber-700' : 'text-slate-500' }}">{{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
                                     <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
                                     @if ($task->Description)
-                                        <p class="mt-2 whitespace-pre-line wrap-break-word text-sm text-slate-600">{{ $task->Description }}</p>
+                                        <div class="task-description mt-2 wrap-break-word text-sm text-slate-600">{!! $task->Description !!}</div>
                                     @endif
                                 </div>
                                 <div class="flex shrink-0 items-start gap-2">
@@ -241,8 +245,18 @@
     }
 
     (function () {
-        const getContext = (textarea) => {
-            const beforeCursor = textarea.value.slice(0, textarea.selectionStart);
+        const getContext = (field) => {
+            const editor = field._quill || field.closest('[data-task-editor]')?._quill;
+            const selection = editor ? editor.getSelection() : null;
+
+            if (editor && !selection) {
+                return null;
+            }
+
+            const end = editor ? selection.index : field.selectionStart;
+            const beforeCursor = editor
+                ? editor.getText(0, end)
+                : field.value.slice(0, end);
             const match = beforeCursor.match(/(?:^|\s)([/@])([^\s]*)$/);
 
             if (!match) {
@@ -253,7 +267,7 @@
                 trigger: match[1],
                 query: match[2].toLowerCase(),
                 start: beforeCursor.length - match[0].length + (match[0][0] === ' ' ? 1 : 0),
-                end: textarea.selectionStart,
+                end,
             };
         };
 
@@ -266,10 +280,10 @@
             }
         };
 
-        const showSuggestions = (textarea) => {
-            const container = textarea.closest('[data-task-mentions]');
+        const showSuggestions = (field) => {
+            const container = field.closest('[data-task-mentions]');
             const suggestions = container?.querySelector('[data-task-suggestions]');
-            const context = getContext(textarea);
+            const context = getContext(field);
 
             if (!container || !suggestions || !context) {
                 if (container) {
@@ -279,6 +293,7 @@
                 return;
             }
 
+            container._taskMentionContext = context;
             const source = context.trigger === '/'
                 ? (window.taskMentionData?.products || [])
                 : (window.taskMentionData?.customers || []);
@@ -291,22 +306,116 @@
                 return;
             }
 
-            suggestions.innerHTML = matches.map((item) => `
-                <button type="button" data-task-suggestion="${item.name.replace(/"/g, '&quot;')}" class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
-                    <span class="mr-2 font-semibold text-indigo-600">${context.trigger}</span>${item.name}
-                </button>
-            `).join('');
+            suggestions.replaceChildren();
+
+            matches.forEach((item) => {
+                const button = document.createElement('button');
+                const trigger = document.createElement('span');
+
+                button.type = 'button';
+                button.dataset.taskSuggestion = item.name;
+                button.className = 'block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100';
+                trigger.className = 'mr-2 font-semibold text-indigo-600';
+                trigger.textContent = context.trigger;
+                button.append(trigger, document.createTextNode(item.name));
+                suggestions.append(button);
+            });
+
             suggestions.classList.remove('hidden');
         };
 
+        const initializeTaskEditors = (root = document) => {
+            if (!window.Quill) {
+                return;
+            }
+
+            const containers = [];
+
+            if (root.matches?.('[data-task-editor-container]')) {
+                containers.push(root);
+            }
+
+            containers.push(...root.querySelectorAll?.('[data-task-editor-container]') || []);
+
+            containers.forEach((container) => {
+                const editorElement = container.querySelector('[data-task-editor]');
+
+                if (!editorElement || editorElement._quill) {
+                    return;
+                }
+
+                const editor = new window.Quill(editorElement, {
+                    theme: 'snow',
+                    placeholder: 'Type / for products or @ for customers',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ list: 'ordered' }, { list: 'bullet' }],
+                            ['link', 'clean'],
+                        ],
+                    },
+                });
+                const initialContent = container.dataset.initialContent || '';
+
+                editor.clipboard.dangerouslyPasteHTML(initialContent || '<p><br></p>');
+                editorElement._quill = editor;
+                editorElement._taskEditorInitialContent = initialContent;
+                editorElement.hidden = false;
+                editor.on('text-change', () => {
+                    const componentRoot = editorElement.closest('[wire\\:id]');
+                    const wire = componentRoot && Livewire.find(componentRoot.getAttribute('wire:id'));
+                    const property = container.dataset.livewireProperty;
+                    const content = editor.getText().trim() ? editor.root.innerHTML : '';
+
+                    editorElement._taskEditorInitialContent = content;
+                    wire?.$set(property, content, false);
+                    window.requestAnimationFrame(() => showSuggestions(editor.root));
+                });
+                editor.root.addEventListener('keyup', () => showSuggestions(editor.root));
+                editor.root.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeSuggestions(editor.root.closest('[data-task-mentions]'));
+                    }
+                });
+            });
+        };
+
+        const syncTaskEditors = (root) => {
+            initializeTaskEditors(root);
+
+            const containers = [];
+
+            if (root.matches?.('[data-task-editor-container]')) {
+                containers.push(root);
+            }
+
+            containers.push(...root.querySelectorAll?.('[data-task-editor-container]') || []);
+
+            containers.forEach((container) => {
+                const editorElement = container.querySelector('[data-task-editor]');
+                const editor = editorElement?._quill;
+                const initialContent = container.dataset.initialContent || '';
+
+                if (editor && initialContent !== editorElement._taskEditorInitialContent) {
+                    editor.clipboard.dangerouslyPasteHTML(initialContent || '<p><br></p>');
+                    editorElement._taskEditorInitialContent = initialContent;
+                }
+            });
+        };
+
+        document.addEventListener('livewire:init', () => {
+            initializeTaskEditors();
+            Livewire.hook('morph.added', ({ el }) => initializeTaskEditors(el));
+            Livewire.hook('morph.updated', ({ el }) => syncTaskEditors(el));
+        }, { once: true });
+        window.addEventListener('load', () => initializeTaskEditors(), { once: true });
         document.addEventListener('input', (event) => {
-            if (event.target.matches('[data-task-mentions] input, [data-task-mentions] textarea')) {
+            if (event.target.matches('[data-task-mentions] input')) {
                 showSuggestions(event.target);
             }
         });
-
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && event.target.matches('[data-task-mentions] input, [data-task-mentions] textarea')) {
+            if (event.key === 'Escape' && event.target.matches('[data-task-mentions] input')) {
                 closeSuggestions(event.target.closest('[data-task-mentions]'));
             }
         });
@@ -319,18 +428,29 @@
             }
 
             const container = suggestion.closest('[data-task-mentions]');
+            const editorElement = container?.querySelector('[data-task-editor]');
             const field = container?.querySelector('input, textarea');
-            const context = field ? getContext(field) : null;
+            const editor = editorElement?._quill;
+            const context = container?._taskMentionContext;
 
-            if (!field || !context) {
+            if ((!field && !editor) || !context) {
                 return;
             }
 
             const name = suggestion.dataset.taskSuggestion;
-            field.setRangeText(`${context.trigger}${name} `, context.start, context.end, 'end');
-            field.dispatchEvent(new Event('input', { bubbles: true }));
+
+            if (editor) {
+                editor.deleteText(context.start, context.end - context.start, 'user');
+                editor.insertText(context.start, `${context.trigger}${name} `, 'user');
+                editor.setSelection(context.start + context.trigger.length + name.length + 1, 0, 'user');
+                editor.focus();
+            } else {
+                field.setRangeText(`${context.trigger}${name} `, context.start, context.end, 'end');
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                field.focus();
+            }
+
             closeSuggestions(container);
-            field.focus();
         });
 
         document.addEventListener('click', (event) => {

@@ -67,7 +67,7 @@ class Dashboard extends Component
 
         DB::table('Task')->insert([
             'Title' => $validated['taskTitle'],
-            'Description' => $validated['taskDescription'] ?: null,
+            'Description' => $this->sanitizeTaskDescription($validated['taskDescription']),
             'DueDate' => $validated['taskDueDate'],
             'IsCompleted' => false,
             'UserId' => Auth::id(),
@@ -118,7 +118,7 @@ class Dashboard extends Component
 
         $this->editingTaskId = (int) $task->Id;
         $this->editTaskTitle = (string) $task->Title;
-        $this->editTaskDescription = (string) ($task->Description ?? '');
+        $this->editTaskDescription = $this->sanitizeTaskDescription($task->Description) ?? '';
         $this->editTaskDueDate = (string) $task->DueDate;
     }
 
@@ -145,7 +145,7 @@ class Dashboard extends Component
             ->where('IsCompleted', false)
             ->update([
                 'Title' => $validated['editTaskTitle'],
-                'Description' => $validated['editTaskDescription'] ?: null,
+                'Description' => $this->sanitizeTaskDescription($validated['editTaskDescription']),
                 'DueDate' => $validated['editTaskDueDate'],
                 'updated_at' => now(),
             ]);
@@ -205,7 +205,6 @@ class Dashboard extends Component
             ->leftJoin('PaymentType as payment_type', 'payment_type.Id', '=', 'payment.PaymentTypeId')
             ->where('document.DocumentTypeId', 2)
             ->where('document.PaidStatus', 1)
-            ->where('document.IsClockedOut', 0)
             ->selectRaw('document.Id, document.Total, COALESCE(SUM(CASE WHEN payment_type.MarkAsPaid = 1 AND LOWER(payment_type.Name) <> "credit" THEN payment.Amount ELSE 0 END), 0) as paid_amount')
             ->groupBy('document.Id', 'document.Total')
             ->get();
@@ -353,11 +352,11 @@ class Dashboard extends Component
             ]);
 
         $tasks->each(function ($task): void {
-            $task->Description = str_replace(
+            $task->Description = $this->sanitizeTaskDescription(str_replace(
                 ['\\r\\n', '\\n', '\\r', "\r\n", "\r"],
                 "\n",
                 (string) $task->Description,
-            );
+            ));
         });
 
         $dueTasks = $tasks->filter(fn ($task) => Carbon::parse($task->DueDate)->isSameDay($today));
@@ -372,6 +371,94 @@ class Dashboard extends Component
             'tasks' => $tasks,
             'dueTasks' => $dueTasks,
         ]);
+    }
+
+    private function sanitizeTaskDescription(?string $description): ?string
+    {
+        $description = trim((string) $description);
+        $sanitized = '';
+
+        if ($description !== '') {
+            if ($description === strip_tags($description)) {
+                $sanitized = nl2br(e($description), false);
+            } else {
+                $document = new \DOMDocument('1.0', 'UTF-8');
+                $previousErrorSetting = libxml_use_internal_errors(true);
+                $document->loadHTML(
+                    '<?xml encoding="UTF-8"><div>'.$description.'</div>',
+                    LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD,
+                );
+                libxml_clear_errors();
+                libxml_use_internal_errors($previousErrorSetting);
+
+                $root = $document->getElementsByTagName('div')->item(0);
+
+                if ($root) {
+                    $this->sanitizeTaskNodes($root);
+
+                    foreach ($root->childNodes as $child) {
+                        $sanitized .= $document->saveHTML($child);
+                    }
+                } else {
+                    $sanitized = e($description);
+                }
+            }
+        }
+
+        return trim(strip_tags($sanitized)) === '' ? null : $sanitized;
+    }
+
+    private function sanitizeTaskNodes(\DOMNode $parent): void
+    {
+        $allowedTags = ['a', 'br', 'em', 'li', 'ol', 'p', 's', 'strong', 'u', 'ul'];
+
+        foreach (iterator_to_array($parent->childNodes) as $child) {
+            if (! $child instanceof \DOMElement) {
+                continue;
+            }
+
+            if (! in_array(strtolower($child->tagName), $allowedTags, true)) {
+                $this->unwrapTaskElement($child);
+                $this->sanitizeTaskNodes($parent);
+                continue;
+            }
+
+            $this->sanitizeTaskAttributes($child);
+            $this->sanitizeTaskNodes($child);
+        }
+    }
+
+    private function unwrapTaskElement(\DOMElement $element): void
+    {
+        $parent = $element->parentNode;
+
+        while ($element->firstChild) {
+            $parent->insertBefore($element->firstChild, $element);
+        }
+
+        $parent->removeChild($element);
+    }
+
+    private function sanitizeTaskAttributes(\DOMElement $element): void
+    {
+        foreach (iterator_to_array($element->attributes) as $attribute) {
+            if (strtolower($element->tagName) === 'a' && $attribute->name === 'href') {
+                if (! $this->isSafeTaskLink($attribute->value)) {
+                    $element->removeAttribute($attribute->name);
+                }
+
+                continue;
+            }
+
+            $element->removeAttribute($attribute->name);
+        }
+    }
+
+    private function isSafeTaskLink(string $href): bool
+    {
+        $scheme = parse_url(trim($href), PHP_URL_SCHEME);
+
+        return ! $scheme || in_array(strtolower($scheme), ['http', 'https', 'mailto'], true);
     }
 
 }

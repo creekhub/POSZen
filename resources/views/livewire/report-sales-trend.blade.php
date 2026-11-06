@@ -40,14 +40,21 @@
             </div>
 
             <div class="mt-8 overflow-x-auto pb-2">
-                <div class="flex h-64 min-w-160 items-end gap-2 border-b border-l border-slate-200 px-3 pb-0 pt-6 sm:gap-3">
-                    @foreach ($salesChart['points'] as $point)
-                        <div class="group flex h-full min-w-6 flex-1 flex-col items-center justify-end gap-2" title="{{ $point['label'] }}: ₱{{ number_format($point['value'], 2) }}">
-                            <span class="text-[10px] font-semibold text-slate-600">₱{{ number_format($point['value'], 0) }}</span>
-                            <div class="w-full max-w-10 rounded-t-md bg-emerald-600 transition-colors group-hover:bg-emerald-800" style="height: {{ $point['height'] }}%"></div>
-                            <span class="whitespace-nowrap text-[10px] text-slate-500">{{ $point['label'] }}</span>
-                        </div>
-                    @endforeach
+                <div class="relative h-64 min-w-160">
+                    <canvas id="sales-trend-chart" data-labels="{{ json_encode($salesChart['labels']) }}" data-values="{{ json_encode($salesChart['values']) }}" wire:ignore aria-label="{{ $chartPeriod }} sales trend"></canvas>
+                </div>
+            </div>
+
+            <div class="mt-8 border-t border-slate-200 pt-6">
+                <div class="flex items-baseline justify-between gap-3">
+                    <h3 class="text-lg font-bold">Profit trend</h3>
+                    <span class="text-xs font-semibold text-emerald-700">₱{{ number_format($salesChart['profitTotal'], 2) }}</span>
+                </div>
+                <p class="mt-1 text-sm text-slate-500">{{ $chartPeriod }} total profit across all products</p>
+                <div class="mt-3 overflow-x-auto pb-2">
+                    <div class="relative h-64 min-w-160">
+                        <canvas id="sales-profit-trend-chart" data-labels="{{ json_encode($salesChart['labels']) }}" data-values="{{ json_encode($salesChart['profitValues']) }}" wire:ignore aria-label="{{ $chartPeriod }} profit trend"></canvas>
+                    </div>
                 </div>
             </div>
         </section>

@@ -15,11 +15,11 @@
                 <table class="w-full min-w-120 text-left text-sm">
                     <thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                         <tr>
-                            <th class="px-3 py-3 font-semibold">Code</th>
-                            <th class="px-3 py-3 font-semibold">Product</th>
-                            <th class="px-3 py-3 text-right font-semibold">Price</th>
-                            <th class="px-3 py-3 font-semibold">Unit</th>
-                            <th class="px-3 py-3 font-semibold">Status</th>
+                            <th aria-sort="{{ $sortField === 'Code' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('Code')" class="inline-flex items-center gap-2">Code<i class="fa-solid {{ $sortField === 'Code' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'Name' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('Name')" class="inline-flex items-center gap-2">Product<i class="fa-solid {{ $sortField === 'Name' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'Price' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 text-right font-semibold"><button type="button" wire:click="sortBy('Price')" class="inline-flex items-center gap-2">Price<i class="fa-solid {{ $sortField === 'Price' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'Cost' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 text-right font-semibold"><button type="button" wire:click="sortBy('Cost')" class="inline-flex items-center gap-2">Cost<i class="fa-solid {{ $sortField === 'Cost' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
+                            <th aria-sort="{{ $sortField === 'IsEnabled' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}" class="px-3 py-3 font-semibold"><button type="button" wire:click="sortBy('IsEnabled')" class="inline-flex items-center gap-2">Status<i class="fa-solid {{ $sortField === 'IsEnabled' ? ($sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort' }} text-slate-400" aria-hidden="true"></i></button></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -28,7 +28,7 @@
                                 <td class="px-3 py-3 text-slate-500">{{ $product->Code ?: '-' }}</td>
                                 <td class="px-3 py-3 font-medium text-slate-800">{{ $product->Name }}</td>
                                 <td class="px-3 py-3 text-right tabular-nums">{{ number_format((float) $product->Price, 2) }}</td>
-                                <td class="px-3 py-3">{{ $product->MeasurementUnit ?: '-' }}</td>
+                                <td class="px-3 py-3 text-right tabular-nums">{{ number_format((float) $product->Cost, 2) }}</td>
                                 <td class="px-3 py-3 {{ $product->IsEnabled ? 'text-emerald-700' : 'text-slate-500' }}">{{ $product->IsEnabled ? 'Enabled' : 'Disabled' }}</td>
                             </tr>
                         @empty

@@ -23,10 +23,14 @@
             </form>
         </section>
 
-        <section class="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Sales summary">
+        <section class="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-5" aria-label="Sales summary">
             <div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
                 <p class="text-sm text-slate-500">Sales</p>
                 <p class="mt-3 text-2xl font-bold">₱{{ number_format($salesTotal, 2) }}</p>
+            </div>
+            <div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <p class="text-sm text-slate-500">Profit</p>
+                <p class="mt-3 text-2xl font-bold {{ $profitTotal < 0 ? 'text-rose-700' : 'text-emerald-700' }}">₱{{ number_format($profitTotal, 2) }}</p>
             </div>
             <div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
                 <p class="text-sm text-slate-500">Transactions</p>

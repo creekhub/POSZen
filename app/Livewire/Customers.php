@@ -2,8 +2,8 @@
 
 namespace App\Livewire;
 
-use Illuminate\Support\Collection;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -12,19 +12,40 @@ class Customers extends Component
 {
     use WithPagination;
 
+    private const PAYMENT_TABLE = 'Payment as payment';
+
+    private const PAYMENT_TYPE_TABLE = 'PaymentType as payment_type';
+
     public string $search = '';
+
+    public string $sortField = 'Name';
+
+    public string $sortDirection = 'asc';
+
     public ?int $editingCustomerId = null;
+
     public string $editName = '';
+
     public string $editCode = '';
+
     public string $editEmail = '';
+
     public string $editPhoneNumber = '';
+
     public string $editAddress = '';
+
     public string $editCity = '';
+
     public bool $editIsEnabled = true;
+
     public ?int $selectedCustomerId = null;
+
     public ?int $paymentDocumentId = null;
+
     public int $paymentTypeId = 0;
+
     public string $paymentAmount = '';
+
     public string $actionMessage = '';
 
     public function editCustomer(int $customerId): void
@@ -33,6 +54,7 @@ class Customers extends Component
 
         if (! $customer) {
             $this->addError('customer', 'Customer not found.');
+
             return;
         }
 
@@ -87,6 +109,7 @@ class Customers extends Component
 
         if (! $customerExists) {
             $this->addError('customer', 'Customer not found.');
+
             return;
         }
 
@@ -117,6 +140,7 @@ class Customers extends Component
 
         if (! $firstSale) {
             $this->actionMessage = 'This customer has no outstanding balance.';
+
             return;
         }
 
@@ -134,6 +158,7 @@ class Customers extends Component
 
         if (! $sale || $sale->balance <= 0) {
             $this->addError('paymentAmount', 'This invoice has no outstanding balance.');
+
             return;
         }
 
@@ -146,6 +171,7 @@ class Customers extends Component
 
         if (! $paymentType) {
             $this->addError('paymentTypeId', 'No active payment methods are available for receiving payment.');
+
             return;
         }
 
@@ -179,6 +205,7 @@ class Customers extends Component
 
         if (! $paymentType) {
             $this->addError('paymentTypeId', 'Select an active payment method.');
+
             return;
         }
 
@@ -196,8 +223,8 @@ class Customers extends Component
                 return ['error' => 'This invoice is no longer awaiting payment. Refresh the statement and try again.'];
             }
 
-            $paidAmount = (float) DB::table('Payment as payment')
-                ->join('PaymentType as payment_type', 'payment_type.Id', '=', 'payment.PaymentTypeId')
+            $paidAmount = (float) DB::table(self::PAYMENT_TABLE)
+                ->join(self::PAYMENT_TYPE_TABLE, 'payment_type.Id', '=', 'payment.PaymentTypeId')
                 ->where('payment.DocumentId', $sale->Id)
                 ->where('payment_type.MarkAsPaid', 1)
                 ->whereRaw('LOWER(payment_type.Name) <> ?', ['credit'])
@@ -231,6 +258,7 @@ class Customers extends Component
 
         if (isset($result['error'])) {
             $this->addError('paymentAmount', $result['error']);
+
             return;
         }
 
@@ -244,32 +272,72 @@ class Customers extends Component
         $this->resetPage();
     }
 
+    public function sortBy(string $field): void
+    {
+        $allowedFields = ['Code', 'Name', 'Email', 'PhoneNumber', 'City', 'IsEnabled', 'Outstanding', 'LoyaltyCardPoints'];
+
+        if (! in_array($field, $allowedFields, true)) {
+            return;
+        }
+
+        if ($this->sortField === $field) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortField = $field;
+            $this->sortDirection = 'asc';
+        }
+
+        $this->resetPage();
+    }
+
     public function render(): View
     {
         $search = trim($this->search);
 
-        $customers = DB::table('Customer')
-            ->where('IsCustomer', 1)
+        $paidAmounts = DB::table(self::PAYMENT_TABLE)
+            ->join(self::PAYMENT_TYPE_TABLE, 'payment_type.Id', '=', 'payment.PaymentTypeId')
+            ->where('payment_type.MarkAsPaid', 1)
+            ->whereRaw('LOWER(payment_type.Name) <> ?', ['credit'])
+            ->select('payment.DocumentId')
+            ->selectRaw('COALESCE(SUM(payment.Amount), 0) as paid_amount')
+            ->groupBy('payment.DocumentId');
+        $outstandingBalances = DB::table('Document as document')
+            ->leftJoinSub($paidAmounts, 'paid_amounts', 'paid_amounts.DocumentId', '=', 'document.Id')
+            ->where('document.DocumentTypeId', 2)
+            ->where('document.PaidStatus', 1)
+            ->groupBy('document.CustomerId')
+            ->select('document.CustomerId')
+            ->selectRaw('SUM(CASE WHEN document.Total > COALESCE(paid_amounts.paid_amount, 0) THEN document.Total - COALESCE(paid_amounts.paid_amount, 0) ELSE 0 END) as outstanding_balance');
+        $sortColumns = [
+            'Code' => 'customer.Code',
+            'Name' => 'customer.Name',
+            'Email' => 'customer.Email',
+            'PhoneNumber' => 'customer.PhoneNumber',
+            'City' => 'customer.City',
+            'IsEnabled' => 'customer.IsEnabled',
+            'Outstanding' => 'balance_summary.outstanding_balance',
+            'LoyaltyCardPoints' => 'customer.LoyaltyCardPoints',
+        ];
+        $sortColumn = $sortColumns[$this->sortField] ?? 'customer.Name';
+        $sortDirection = $this->sortDirection === 'desc' ? 'desc' : 'asc';
+
+        $customers = DB::table('Customer as customer')
+            ->leftJoinSub($outstandingBalances, 'balance_summary', 'balance_summary.CustomerId', '=', 'customer.Id')
+            ->where('customer.IsCustomer', 1)
             ->when($search !== '', function ($query) use ($search): void {
                 $term = '%'.$search.'%';
                 $query->where(function ($query) use ($term): void {
-                    $query->where('Name', 'like', $term)
-                        ->orWhere('Code', 'like', $term)
-                        ->orWhere('Email', 'like', $term)
-                        ->orWhere('PhoneNumber', 'like', $term);
+                    $query->where('customer.Name', 'like', $term)
+                        ->orWhere('customer.Code', 'like', $term)
+                        ->orWhere('customer.Email', 'like', $term)
+                        ->orWhere('customer.PhoneNumber', 'like', $term);
                 });
             })
-            ->orderBy('Name')
+            ->select('customer.*')
+            ->selectRaw('COALESCE(balance_summary.outstanding_balance, 0) as outstanding_balance')
+            ->orderBy($sortColumn, $sortDirection)
+            ->orderBy('customer.Id')
             ->paginate(20);
-
-        $pageCustomerIds = $customers->getCollection()->pluck('Id')->map(fn ($id) => (int) $id)->all();
-        $balancesByCustomer = $this->unpaidSalesForCustomers($pageCustomerIds)
-            ->groupBy('CustomerId')
-            ->map(fn (Collection $sales): float => (float) $sales->sum('balance'));
-
-        $customers->getCollection()->each(function ($customer) use ($balancesByCustomer): void {
-            $customer->outstanding_balance = $balancesByCustomer->get($customer->Id, 0.0);
-        });
 
         $soaCustomer = $this->selectedCustomerId
             ? DB::table('Customer')->where('Id', $this->selectedCustomerId)->where('IsCustomer', 1)->first(['Id', 'Name'])
@@ -294,8 +362,8 @@ class Customers extends Component
         }
 
         $sales = DB::table('Document as document')
-            ->leftJoin('Payment as payment', 'payment.DocumentId', '=', 'document.Id')
-            ->leftJoin('PaymentType as payment_type', 'payment_type.Id', '=', 'payment.PaymentTypeId')
+            ->leftJoin(self::PAYMENT_TABLE, 'payment.DocumentId', '=', 'document.Id')
+            ->leftJoin(self::PAYMENT_TYPE_TABLE, 'payment_type.Id', '=', 'payment.PaymentTypeId')
             ->where('document.DocumentTypeId', 2)
             ->where('document.PaidStatus', 1)
             ->whereIn('document.CustomerId', $customerIds)

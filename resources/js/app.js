@@ -1,4 +1,15 @@
 import Chart from 'chart.js/auto';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import JsBarcode from 'jsbarcode';
+import $ from 'jquery';
+import Quill from 'quill';
+import select2 from 'select2';
+import 'quill/dist/quill.snow.css';
+import 'select2/dist/css/select2.min.css';
+
+window.Quill = Quill;
+window.$ = window.jQuery = $;
+select2(window, $);
 
 const printerCommands = {
 	init: Uint8Array.from([0x1b, 0x40]),
@@ -209,7 +220,101 @@ class PosHardware {
 window.posHardware = new PosHardware();
 window.addEventListener('pos:open-cash-drawer', () => window.posHardware.openDrawer());
 
+const initializeProductCategorySelect = () => {
+	const getWire = (element) => {
+		const componentRoot = element.closest(String.raw`[wire\:id]`);
+		return componentRoot && window.Livewire?.find(componentRoot.getAttribute('wire:id'));
+	};
+	const categorySelect = document.getElementById('product-report-category');
+
+	if (categorySelect && !$(categorySelect).hasClass('select2-hidden-accessible')) {
+		const $categories = $(categorySelect);
+
+		$categories.select2({
+			allowClear: true,
+			closeOnSelect: false,
+			placeholder: 'All categories',
+			width: '100%',
+		});
+		$categories.on('change', () => {
+			const productSelect = document.getElementById('product-report-products');
+
+			if (productSelect) {
+				$(productSelect).empty().val(null).trigger('change.select2');
+			}
+
+			getWire(categorySelect)?.$set('productCategoryIds', $categories.val() || [], true);
+		});
+	}
+
+	const favoriteProductSelect = document.getElementById('favorite-product-search');
+	if (favoriteProductSelect && !$(favoriteProductSelect).hasClass('select2-hidden-accessible')) {
+		const $favoriteProducts = $(favoriteProductSelect);
+		$favoriteProducts.select2({
+			ajax: {
+				url: favoriteProductSelect.dataset.searchUrl,
+				dataType: 'json',
+				delay: 250,
+				data: (params) => ({ term: params.term || '', excludeTrackedFavorites: 1 }),
+			},
+			closeOnSelect: false,
+			minimumInputLength: 2,
+			placeholder: 'Search by product name or code...',
+			width: '100%',
+		});
+		$favoriteProducts.on('change', () => {
+			getWire(favoriteProductSelect)?.$set('selectedProductIds', $favoriteProducts.val() || [], true);
+		});
+		Livewire.on('favorite-products-added', () => {
+			$favoriteProducts.val(null).trigger('change.select2');
+		});
+	}
+
+	const productSelect = document.getElementById('product-report-products');
+
+	if (!productSelect || $(productSelect).hasClass('select2-hidden-accessible')) {
+		return;
+	}
+
+	const $products = $(productSelect);
+	$products.select2({
+		ajax: {
+			url: productSelect.dataset.searchUrl,
+			dataType: 'json',
+			delay: 250,
+			data: (params) => ({
+				term: params.term || '',
+				categories: $('#product-report-category').val() || [],
+			}),
+		},
+		closeOnSelect: false,
+		minimumInputLength: 2,
+		placeholder: 'Search by product name or code...',
+		width: '100%',
+	});
+	$products.on('change', () => {
+		getWire(productSelect)?.$set('selectedProductIds', $products.val() || [], true);
+	});
+};
+
+document.addEventListener('livewire:init', initializeProductCategorySelect, { once: true });
+window.addEventListener('load', initializeProductCategorySelect, { once: true });
+
 document.addEventListener('livewire:init', () => {
+	Livewire.on('loyalty-card-number-generated', ({ code }) => {
+		const barcode = document.getElementById('loyalty-card-barcode');
+
+		if (barcode) {
+			JsBarcode(barcode, code, {
+				format: 'EAN13',
+				height: 56,
+				margin: 8,
+				fontSize: 14,
+				textMargin: 4,
+			});
+		}
+	});
+
 	const sizeTrendChartForLabels = (canvas, labelCount) => {
 		const chartContent = canvas.parentElement;
 		const scrollContainer = chartContent?.parentElement;
@@ -220,6 +325,178 @@ document.addEventListener('livewire:init', () => {
 
 		chartContent.style.width = `${Math.max(scrollContainer.clientWidth, labelCount * 64)}px`;
 	};
+	const createCurrencyChart = (canvas, label, color) => {
+		const currency = new Intl.NumberFormat('en-PH', {
+			style: 'currency',
+			currency: 'PHP',
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		});
+		const compactCurrency = new Intl.NumberFormat('en-PH', {
+			style: 'currency',
+			currency: 'PHP',
+			maximumFractionDigits: 0,
+		});
+		const labels = JSON.parse(canvas.dataset.labels || '[]');
+		const values = JSON.parse(canvas.dataset.values || '[]');
+		const chart = new Chart(canvas, {
+			type: 'line',
+			data: {
+				labels,
+				datasets: [{
+					label,
+					data: values,
+					borderColor: color,
+					backgroundColor: color,
+					borderWidth: 2,
+					pointRadius: 2,
+					pointHoverRadius: 5,
+					tension: 0.25,
+					fill: false,
+				}],
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				layout: { padding: { top: 16 } },
+				plugins: {
+					legend: { display: false },
+					datalabels: {
+						align: 'top',
+						anchor: 'end',
+						color: '#475569',
+						font: { size: 10, weight: '600' },
+						formatter: (value) => compactCurrency.format(Number(value || 0)),
+						offset: 4,
+					},
+					tooltip: {
+						callbacks: {
+							label: (context) => currency.format(Number(context.parsed.y || 0)),
+						},
+					},
+				},
+				scales: {
+					x: {
+						grid: { display: false },
+						border: { display: false },
+						ticks: { maxRotation: 0, autoSkip: true },
+					},
+					y: {
+						beginAtZero: true,
+						grid: { color: 'rgba(148, 163, 184, 0.18)' },
+						border: { display: false },
+						ticks: { callback: (value) => currency.format(Number(value)) },
+					},
+				},
+			},
+			plugins: [ChartDataLabels],
+		});
+
+		return chart;
+	};
+
+	const salesCanvas = document.getElementById('sales-trend-chart');
+	const profitCanvas = document.getElementById('sales-profit-trend-chart');
+	if (salesCanvas && profitCanvas) {
+		const salesChart = createCurrencyChart(salesCanvas, 'Sales', '#059669');
+		const profitChart = createCurrencyChart(profitCanvas, 'Profit', '#d97706');
+
+		Livewire.on('sales-trend-updated', ({ labels, salesValues, profitValues }) => {
+			for (const [canvas, chart] of [[salesCanvas, salesChart], [profitCanvas, profitChart]]) {
+				sizeTrendChartForLabels(canvas, labels.length);
+				chart.data.labels = labels;
+				chart.resize();
+			}
+			salesChart.data.datasets[0].data = salesValues;
+			profitChart.data.datasets[0].data = profitValues;
+			salesChart.update();
+			profitChart.update();
+		});
+	}
+
+	const favoriteProductsSalesCanvas = document.getElementById('favorite-products-sales-chart');
+	const favoriteProductsProfitCanvas = document.getElementById('favorite-products-profit-chart');
+	if (favoriteProductsSalesCanvas && favoriteProductsProfitCanvas) {
+		const currency = new Intl.NumberFormat('en-PH', {
+			style: 'currency',
+			currency: 'PHP',
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		});
+		const compactCurrency = new Intl.NumberFormat('en-PH', {
+			style: 'currency',
+			currency: 'PHP',
+			maximumFractionDigits: 0,
+		});
+		const productColors = ['#059669', '#2563eb', '#e11d48', '#d97706', '#7c3aed', '#0891b2', '#4d7c0f', '#c026d3'];
+		const formatDatasets = (datasets) => datasets.map((dataset) => {
+			const color = productColors[dataset.productIndex % productColors.length];
+
+			return {
+				...dataset,
+				borderColor: color,
+				backgroundColor: color,
+				pointStyle: 'circle',
+				borderWidth: 2,
+				pointRadius: 2,
+				tension: 0.25,
+				fill: false,
+			};
+		});
+		const createFavoriteProductsChart = (canvas, datasets, metric) => new Chart(canvas, {
+			type: 'line',
+			data: {
+				labels: JSON.parse(canvas.dataset.labels || '[]'),
+				datasets: formatDatasets(datasets.filter((dataset) => dataset.metric === metric)),
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				plugins: {
+					legend: { display: true, position: 'bottom' },
+					datalabels: {
+						display: (context) => Number(context.dataset.data[context.dataIndex] || 0) !== 0,
+						align: 'top',
+						anchor: 'end',
+						color: (context) => context.dataset.borderColor,
+						font: { size: 9, weight: '600' },
+						formatter: (value) => compactCurrency.format(Number(value || 0)),
+						clamp: true,
+					},
+					tooltip: {
+						callbacks: {
+							label: (context) => `${context.dataset.label}: ${currency.format(Number(context.parsed.y || 0))}`,
+						},
+					},
+				},
+				scales: {
+					x: { grid: { display: false }, border: { display: false } },
+					y: {
+						beginAtZero: true,
+						grid: { color: 'rgba(148, 163, 184, 0.18)' },
+						border: { display: false },
+						ticks: { callback: (value) => currency.format(Number(value)) },
+					},
+				},
+			},
+			plugins: [ChartDataLabels],
+		});
+		const initialDatasets = JSON.parse(favoriteProductsSalesCanvas.dataset.datasets || '[]');
+		const salesChart = createFavoriteProductsChart(favoriteProductsSalesCanvas, initialDatasets, 'sales');
+		const profitChart = createFavoriteProductsChart(favoriteProductsProfitCanvas, initialDatasets, 'profit');
+
+		Livewire.on('favorite-products-trend-updated', ({ labels, datasets }) => {
+			for (const [canvas, chart] of [[favoriteProductsSalesCanvas, salesChart], [favoriteProductsProfitCanvas, profitChart]]) {
+				sizeTrendChartForLabels(canvas, labels.length);
+				chart.data.labels = labels;
+				chart.resize();
+			}
+			salesChart.data.datasets = formatDatasets(datasets.filter((dataset) => dataset.metric === 'sales'));
+			profitChart.data.datasets = formatDatasets(datasets.filter((dataset) => dataset.metric === 'profit'));
+			salesChart.update();
+			profitChart.update();
+		});
+	}
 
 	const canvas = document.getElementById('product-sales-trend');
 	if (canvas) {
@@ -274,76 +551,6 @@ document.addEventListener('livewire:init', () => {
 			}));
 			productTrendChart.resize();
 			productTrendChart.update();
-		});
-	}
-
-	const profitCanvas = document.getElementById('product-profit-trend');
-	if (profitCanvas) {
-		const currency = new Intl.NumberFormat('en-PH', {
-			style: 'currency',
-			currency: 'PHP',
-			maximumFractionDigits: 0,
-		});
-		const profitTrendChart = new Chart(profitCanvas, {
-			type: 'line',
-			data: {
-				labels: [],
-				datasets: [{
-					label: 'Daily profit',
-					data: [],
-					borderColor: '#d97706',
-					backgroundColor: '#d97706',
-					borderWidth: 2,
-					pointRadius: 2,
-					pointHoverRadius: 4,
-					tension: 0.25,
-					fill: false,
-				}],
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				plugins: {
-					legend: { display: false },
-					tooltip: {
-						callbacks: {
-							label: (context) => currency.format(Number(context.parsed.y || 0)),
-						},
-					},
-				},
-				scales: {
-					x: {
-						grid: { display: false },
-						border: { display: false },
-						ticks: { maxRotation: 0, autoSkip: true },
-					},
-					y: {
-						type: 'linear',
-						beginAtZero: true,
-						grid: { color: 'rgba(148, 163, 184, 0.18)' },
-						border: { display: false },
-						ticks: { callback: (value) => currency.format(Number(value)) },
-					},
-				},
-			},
-		});
-
-		const profitSummary = document.getElementById('product-profit-total');
-
-		Livewire.on('product-report-updated', ({ profitLabels, profitValues, profitTotal: totalProfit }) => {
-			sizeTrendChartForLabels(profitCanvas, profitLabels.length);
-			profitTrendChart.data.labels = profitLabels;
-			profitTrendChart.data.datasets[0].data = profitValues;
-			if (profitSummary) {
-				profitSummary.textContent = new Intl.NumberFormat('en-PH', {
-					style: 'currency',
-					currency: 'PHP',
-					minimumFractionDigits: 2,
-					maximumFractionDigits: 2,
-				}).format(Number(totalProfit || 0));
-			}
-			profitTrendChart.resize();
-			profitTrendChart.update();
 		});
 	}
 
