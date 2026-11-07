@@ -77,9 +77,17 @@ class ReportFavoriteProducts extends Component
             ->join(self::PRODUCT_TABLE, 'product.Id', '=', 'favorite.ProductId')
             ->orderBy('product.Name')
             ->get(['product.Id', 'product.Name', 'product.Code']);
+        $chart = $this->buildChart();
+
+        foreach ($favoriteProducts as $product) {
+            $totals = $chart['productTotals'][$product->Id] ?? ['sales' => 0.0, 'profit' => 0.0];
+            $product->totalSales = $totals['sales'];
+            $product->totalProfit = $totals['profit'];
+        }
+
         return view('livewire.report-favorite-products', [
             'favoriteProducts' => $favoriteProducts,
-            'chart' => $this->buildChart(),
+            'chart' => $chart,
         ]);
     }
 
@@ -150,6 +158,7 @@ class ReportFavoriteProducts extends Component
         }
 
         $datasets = [];
+        $productTotals = [];
         $totalSales = 0.0;
         $totalProfit = 0.0;
         foreach ($favoriteProducts as $productIndex => $product) {
@@ -162,8 +171,14 @@ class ReportFavoriteProducts extends Component
                 $profitValues[] = (float) ($productAggregates->get($key)->total_profit ?? 0);
             }
 
-            $totalSales += array_sum($salesValues);
-            $totalProfit += array_sum($profitValues);
+            $productSales = array_sum($salesValues);
+            $productProfit = array_sum($profitValues);
+            $productTotals[$product->Id] = [
+                'sales' => $productSales,
+                'profit' => $productProfit,
+            ];
+            $totalSales += $productSales;
+            $totalProfit += $productProfit;
             $datasets[] = [
                 'label' => $product->Name,
                 'productIndex' => $productIndex,
@@ -181,6 +196,7 @@ class ReportFavoriteProducts extends Component
         return [
             'labels' => $labels,
             'datasets' => $datasets,
+            'productTotals' => $productTotals,
             'totalSales' => $totalSales,
             'totalProfit' => $totalProfit,
         ];

@@ -20,6 +20,8 @@ class SortableDirectoryTablesTest extends TestCase
 
     private const APPLE_PRODUCT = 'Apple Product';
 
+    private const PRODUCT_BEYOND_FIRST_PAGE = 'ZZZ product beyond the first page';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -118,5 +120,45 @@ class SortableDirectoryTablesTest extends TestCase
             ->assertSee(self::ZEBRA_PRODUCT)
             ->assertDontSee(self::APPLE_PRODUCT);
         $this->assertSame(1, substr_count($component->html(), self::ZEBRA_PRODUCT));
+    }
+
+    public function test_product_catalog_print_includes_products_beyond_the_current_page(): void
+    {
+        $products = [];
+
+        for ($id = 3; $id <= 22; $id++) {
+            $products[] = [
+                'Id' => $id,
+                'Name' => 'Product '.str_pad((string) ($id - 2), 2, '0', STR_PAD_LEFT),
+                'Code' => 'P-'.$id,
+                'Price' => 10 + $id,
+                'Cost' => 5,
+                'IsEnabled' => true,
+            ];
+        }
+
+        DB::table('Product')->insert($products);
+        DB::table('Product')->insert([
+            'Id' => 23,
+            'Name' => self::PRODUCT_BEYOND_FIRST_PAGE,
+            'Code' => 'ZZZ-1',
+            'Price' => 42.50,
+            'Cost' => 12.00,
+            'IsEnabled' => true,
+        ]);
+
+        $component = Livewire::test(Products::class)
+            ->assertDontSee(self::PRODUCT_BEYOND_FIRST_PAGE)
+            ->call('prepareCatalogPrint')
+            ->assertSee(self::PRODUCT_BEYOND_FIRST_PAGE)
+            ->assertSee('Selling Price')
+            ->assertSee('42.50')
+            ->assertSee('catalog-print-thermal');
+
+        $component->call('finishCatalogPrint');
+
+        Livewire::test(Products::class)
+            ->call('prepareCatalogPrint', 'a4')
+            ->assertSee('catalog-print-a4');
     }
 }

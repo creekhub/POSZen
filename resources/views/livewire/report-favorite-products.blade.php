@@ -24,10 +24,20 @@
 
                     <ul class="mt-5 divide-y divide-slate-200 border-y border-slate-200">
                         @forelse ($favoriteProducts as $product)
-                            <li wire:key="favorite-product-{{ $product->Id }}" class="flex items-center justify-between gap-4 py-3">
-                                <div class="min-w-0">
+                            <li wire:key="favorite-product-{{ $product->Id }}" class="flex flex-wrap items-center justify-between gap-3 py-3">
+                                <div class="min-w-0 flex-1">
                                     <p class="truncate font-medium">{{ $product->Name }}</p>
                                     <p class="text-sm text-slate-500">{{ $product->Code ?: 'No product code' }}</p>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 text-right text-xs sm:min-w-52">
+                                    <div>
+                                        <p class="text-slate-500">Total sales</p>
+                                        <p class="font-semibold tabular-nums">₱{{ number_format($product->totalSales, 2) }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-slate-500">Total profit</p>
+                                        <p class="font-semibold tabular-nums {{ $product->totalProfit < 0 ? 'text-rose-700' : 'text-emerald-700' }}">₱{{ number_format($product->totalProfit, 2) }}</p>
+                                    </div>
                                 </div>
                                 <button type="button" wire:click="removeProduct({{ $product->Id }})" aria-label="Remove {{ $product->Name }}" class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:border-rose-300 hover:text-rose-700">
                                     <i class="fa-solid fa-trash" aria-hidden="true"></i>

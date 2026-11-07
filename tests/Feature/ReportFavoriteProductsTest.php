@@ -98,6 +98,8 @@ class ReportFavoriteProductsTest extends TestCase
                 ['label' => self::COFFEE_BEANS, 'productIndex' => 1, 'metric' => 'sales', 'data' => array_fill(0, 7, 0)],
                 ['label' => self::COFFEE_BEANS, 'productIndex' => 1, 'metric' => 'profit', 'data' => array_fill(0, 7, 0)],
             ])
+            ->assertSee('₱100.00')
+            ->assertSee('₱60.00')
             ->assertHasNoErrors();
 
         $this->assertDatabaseHas('TrackFavoriteProducts', ['ProductId' => 1]);

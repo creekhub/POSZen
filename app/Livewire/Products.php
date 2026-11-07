@@ -17,6 +17,21 @@ class Products extends Component
 
     public string $sortDirection = 'asc';
 
+    public bool $printingCatalog = false;
+
+    public string $catalogPrintSize = 'thermal';
+
+    public function prepareCatalogPrint(string $paperSize = 'thermal'): void
+    {
+        $this->catalogPrintSize = in_array($paperSize, ['thermal', 'a4'], true) ? $paperSize : 'thermal';
+        $this->printingCatalog = true;
+    }
+
+    public function finishCatalogPrint(): void
+    {
+        $this->printingCatalog = false;
+    }
+
     public function updatingSearch(): void
     {
         $this->resetPage();
@@ -70,6 +85,10 @@ class Products extends Component
             ->orderBy('product.Id')
             ->paginate(20);
 
-        return view('livewire.products', compact('products'));
+        $printProducts = $this->printingCatalog
+            ? DB::table('Product')->select('Name', 'Price')->orderBy('Name')->orderBy('Id')->get()
+            : collect();
+
+        return view('livewire.products', compact('products', 'printProducts'));
     }
 }
