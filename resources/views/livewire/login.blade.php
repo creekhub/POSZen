@@ -1,4 +1,7 @@
-<div class="flex min-h-screen items-center justify-center bg-[#f7f8f3] px-4 py-8 text-[#173f2d]">
+<div class="relative flex min-h-screen items-center justify-center bg-[#f7f8f3] px-4 py-8 text-[#173f2d]">
+    <div class="absolute right-4 top-4">
+        @include('livewire.partials.theme-toggle')
+    </div>
     <div class="w-full max-w-md rounded-2xl border border-[#e3e9df] bg-white p-8 shadow-xl shadow-[#173f2d]/10">
         <div class="mb-8 text-center">
             <img src="{{ asset('images/zenthea-store-logo.svg') }}" alt="Zenthea Store" class="mx-auto mb-5 w-full max-w-56 rounded-xl">

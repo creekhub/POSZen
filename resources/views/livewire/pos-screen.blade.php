@@ -6,6 +6,9 @@
     class="min-h-screen bg-slate-100 p-6 text-slate-800"
 >
     <div class="mx-auto max-w-7xl">
+        <div class="mb-3 flex justify-end">
+            @include('livewire.partials.theme-toggle')
+        </div>
         <header class="mb-6 flex items-center justify-between rounded-2xl bg-slate-900 p-5 text-white shadow-lg">
             <div>
                 <p class="text-xs uppercase tracking-[0.25em] text-slate-400">Point of Sale</p>

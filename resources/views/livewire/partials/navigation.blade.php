@@ -54,6 +54,7 @@
 
 
     <div class="ml-auto flex items-center gap-4">
+        @include('livewire.partials.theme-toggle')
         <span class="text-sm text-slate-500">Welcome, {{ trim((auth()->user()?->FirstName ?? '').' '.(auth()->user()?->LastName ?? '')) ?: 'Admin' }}</span>
         <form method="POST" action="{{ route('logout') }}">
             @csrf

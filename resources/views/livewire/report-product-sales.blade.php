@@ -19,6 +19,7 @@
                     <label for="product-report-category" class="mb-2 block text-sm font-medium text-slate-600">Category</label>
                     <div wire:ignore>
                         <select id="product-report-category" data-product-category-select multiple class="w-full">
+                            <option value="all">All Category</option>
                             @foreach ($productCategories as $category)
                                 <option value="{{ $category->Id }}">{{ $category->Name }}</option>
                             @endforeach

@@ -43,14 +43,17 @@ class ReportProductSales extends Component
     #[Async]
     public function searchProducts(): void
     {
+        $categoryRules = in_array('all', $this->productCategoryIds, true)
+            ? ['productCategoryIds.*' => ['in:all']]
+            : ['productCategoryIds.*' => ['integer', 'exists:ProductGroup,Id']];
+
         $this->validate([
             'productCategoryIds' => ['array', 'max:100'],
-            'productCategoryIds.*' => ['integer', 'exists:ProductGroup,Id'],
             'selectedProductIds' => ['array', 'max:100'],
             'selectedProductIds.*' => ['integer', 'exists:Product,Id'],
             'productStartDate' => ['required', 'date'],
             'productEndDate' => ['required', 'date', 'after_or_equal:productStartDate'],
-        ]);
+        ] + $categoryRules);
 
         $this->productReport = $this->buildProductReport();
 
@@ -85,9 +88,10 @@ class ReportProductSales extends Component
             ->map(fn ($productId) => (int) $productId)
             ->unique()
             ->values();
+        $allCategoriesSelected = in_array('all', $this->productCategoryIds, true);
         $selectedCategoryIds = $this->selectedCategoryIds();
 
-        if ($selectedProductIds->isEmpty() && $selectedCategoryIds !== []) {
+        if ($selectedProductIds->isEmpty() && $selectedCategoryIds !== [] && ! $allCategoriesSelected) {
             $selectedProductIds = DB::table('Product')
                 ->whereIn('ProductGroupId', $selectedCategoryIds)
                 ->orderBy('Name')
@@ -105,12 +109,13 @@ class ReportProductSales extends Component
                 ->map(fn ($product) => (array) $product)
                 ->all()
             : [];
-        $groupByCategory = $selectedCategoryIds !== [];
+        $groupByCategory = $allCategoriesSelected || $selectedCategoryIds !== [];
         $groupIdColumn = $groupByCategory ? 'product_group.Id' : 'product.Id';
         $groupNameColumn = $groupByCategory ? 'product_group.Name' : 'product.Name';
         $trendGroups = $groupByCategory
             ? DB::table('ProductGroup')
-                ->whereIn('Id', $selectedCategoryIds)
+                ->when(! $allCategoriesSelected, fn ($query) => $query->whereIn('Id', $selectedCategoryIds))
+                ->orderBy('Name')
                 ->get(['Id', 'Name'])
                 ->map(fn ($category) => (array) $category)
                 ->all()
@@ -119,24 +124,32 @@ class ReportProductSales extends Component
         $products = [];
         $dailyQuantities = collect();
         $lineAmount = 'COALESCE(item.TotalAfterDocumentDiscount, item.Total, item.PriceAfterDiscount * item.Quantity)';
-        $documentSubtotal = '(SELECT COALESCE(SUM(COALESCE(discount_item.TotalAfterDocumentDiscount, discount_item.Total, discount_item.PriceAfterDiscount * discount_item.Quantity)), 0) FROM DocumentItem as discount_item WHERE discount_item.DocumentId = document.Id)';
+        $documentSubtotals = DB::table('DocumentItem as discount_item')
+            ->join('Document as subtotal_document', 'subtotal_document.Id', '=', 'discount_item.DocumentId')
+            ->where('subtotal_document.DocumentTypeId', 2)
+            ->whereBetween('subtotal_document.Date', [$startDate->copy()->startOfDay(), $endDate->copy()->endOfDay()])
+            ->select('discount_item.DocumentId')
+            ->selectRaw('COALESCE(SUM(COALESCE(discount_item.TotalAfterDocumentDiscount, discount_item.Total, discount_item.PriceAfterDiscount * discount_item.Quantity)), 0) as subtotal')
+            ->groupBy('discount_item.DocumentId');
+        $documentSubtotal = 'COALESCE(document_subtotal.subtotal, 0)';
         $effectiveOrderDiscount = '(CASE WHEN COALESCE(document.Discount, 0) > '.$documentSubtotal.' THEN '.$documentSubtotal.' ELSE COALESCE(document.Discount, 0) END)';
         $orderDiscountAllocation = '('.$effectiveOrderDiscount.' * '.$lineAmount.' / NULLIF('.$documentSubtotal.', 0))';
         $netAmount = '(CASE WHEN '.$lineAmount.' <= '.$orderDiscountAllocation.' THEN 0 ELSE '.$lineAmount.' - '.$orderDiscountAllocation.' END)';
         $productCost = 'COALESCE(NULLIF(item.ProductCost, 0), NULLIF(product.Cost, 0), product.LastPurchasePrice, 0)';
 
-        if ($selectedProductIds->isNotEmpty()) {
+        if ($selectedProductIds->isNotEmpty() || $allCategoriesSelected) {
             $baseQuery = DB::table('DocumentItem as item')
                 ->join('Document as document', 'document.Id', '=', 'item.DocumentId')
                 ->join('Product as product', 'product.Id', '=', 'item.ProductId')
                 ->leftJoin('ProductGroup as product_group', 'product_group.Id', '=', 'product.ProductGroupId')
                 ->where('document.DocumentTypeId', 2)
-                ->whereDate('document.Date', '>=', $startDate->toDateString())
-                ->whereDate('document.Date', '<=', $endDate->toDateString())
-                ->whereIn('item.ProductId', $selectedProductIds)
-                ->when($selectedCategoryIds !== [], fn ($query) => $query->whereIn('product.ProductGroupId', $selectedCategoryIds));
+                ->whereBetween('document.Date', [$startDate->copy()->startOfDay(), $endDate->copy()->endOfDay()])
+                ->when($selectedProductIds->isNotEmpty(), fn ($query) => $query->whereIn('item.ProductId', $selectedProductIds))
+                ->when($allCategoriesSelected, fn ($query) => $query->whereNotNull('product_group.Id'))
+                ->when(! $allCategoriesSelected && $selectedCategoryIds !== [], fn ($query) => $query->whereIn('product.ProductGroupId', $selectedCategoryIds));
 
             $products = (clone $baseQuery)
+                ->leftJoinSub($documentSubtotals, 'document_subtotal', 'document_subtotal.DocumentId', '=', 'document.Id')
                 ->selectRaw($groupIdColumn.' as product_id, '.$groupNameColumn.' as product_name, COALESCE(SUM(item.Quantity), 0) as total_quantity')
                 ->selectRaw('COALESCE(SUM('.$netAmount.'), 0) as total_amount')
                 ->selectRaw('COALESCE(SUM(CASE WHEN '.$productCost.' > 0 THEN ('.$netAmount.') - ('.$productCost.') * item.Quantity ELSE 0 END), 0) as total_profit')
@@ -196,6 +209,10 @@ class ReportProductSales extends Component
 
     private function selectedCategoryIds(): array
     {
+        if (in_array('all', $this->productCategoryIds, true)) {
+            return [];
+        }
+
         return collect($this->productCategoryIds)
             ->filter(fn ($categoryId) => filter_var($categoryId, FILTER_VALIDATE_INT) !== false && (int) $categoryId > 0)
             ->map(fn ($categoryId) => (int) $categoryId)

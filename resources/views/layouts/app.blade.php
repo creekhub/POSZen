@@ -6,6 +6,13 @@
 
         <title>{{ config('app.name', 'POSZen') }}</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+        <script>
+            try {
+                document.documentElement.dataset.theme = localStorage.getItem('poszen-theme') === 'dark' ? 'dark' : 'light';
+            } catch {
+                document.documentElement.dataset.theme = 'light';
+            }
+        </script>
 
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/app.css', 'resources/js/app.js'])

@@ -19,6 +19,14 @@ class Dashboard extends Component
     public string $taskMessage = '';
     public string $taskError = '';
     public bool $showTaskReminder = true;
+    public string $calendarMonth = '';
+    public bool $showCalendarCreateModal = false;
+    public bool $showCalendarHolidayModal = false;
+    public ?int $calendarHolidayId = null;
+    public string $calendarHolidayName = '';
+    public string $calendarHolidayDate = '';
+    public string $calendarHolidayType = 'Regular';
+    public ?int $viewingTaskId = null;
     public ?int $editingTaskId = null;
     public string $editTaskTitle = '';
     public string $editTaskDescription = '';
@@ -28,7 +36,7 @@ class Dashboard extends Component
     {
         $today = Carbon::today();
         $this->taskDueDate = $today->toDateString();
-
+        $this->calendarMonth = $today->format('Y-m');
     }
 
     public function updatedTaskCustomerSearch(string $value): void
@@ -87,6 +95,7 @@ class Dashboard extends Component
         ]);
         $this->taskDueDate = Carbon::today()->toDateString();
         $this->taskMessage = 'Task created.';
+        $this->showCalendarCreateModal = false;
     }
 
     public function completeTask(int $taskId): void
@@ -102,14 +111,152 @@ class Dashboard extends Component
             ]);
 
         $this->showTaskReminder = false;
+        if ($this->viewingTaskId === $taskId) {
+            $this->viewingTaskId = null;
+        }
+    }
+
+    public function openCalendarTaskForm(string $date): void
+    {
+        $validated = validator(
+            ['calendarTaskDate' => $date],
+            ['calendarTaskDate' => ['required', 'date']],
+        )->validate();
+
+        $this->reset([
+            'taskTitle',
+            'taskDescription',
+            'taskCustomerId',
+            'taskDocumentId',
+            'taskCustomerSearch',
+            'taskDocumentSearch',
+        ]);
+        $this->resetValidation();
+        $this->taskDueDate = Carbon::parse($validated['calendarTaskDate'])->toDateString();
+        $this->showCalendarCreateModal = true;
+    }
+
+    public function changeCalendarMonth(int $direction): void
+    {
+        if (! in_array($direction, [-1, 0, 1], true)) {
+            return;
+        }
+
+        $this->calendarMonth = $direction === 0
+            ? Carbon::today()->format('Y-m')
+            : Carbon::parse($this->calendarMonth.'-01')->addMonths($direction)->format('Y-m');
+    }
+
+    public function openCalendarHolidayForm(?int $holidayId = null, ?string $date = null): void
+    {
+        $this->resetValidation();
+        $this->calendarHolidayId = null;
+        $this->calendarHolidayName = '';
+        $this->calendarHolidayDate = $date ?? Carbon::today()->toDateString();
+        $this->calendarHolidayType = 'Regular';
+
+        if ($holidayId !== null) {
+            $holiday = DB::table('CalendarHoliday')->where('Id', $holidayId)->first();
+
+            if (! $holiday) {
+                return;
+            }
+
+            $this->calendarHolidayId = (int) $holiday->Id;
+            $this->calendarHolidayName = (string) $holiday->HolidayName;
+            $this->calendarHolidayDate = Carbon::parse($holiday->Date)->toDateString();
+            $this->calendarHolidayType = (string) $holiday->Type;
+        }
+
+        $this->showCalendarHolidayModal = true;
+    }
+
+    public function saveCalendarHoliday(): void
+    {
+        $validated = $this->validate([
+            'calendarHolidayName' => ['required', 'string', 'max:255'],
+            'calendarHolidayDate' => ['required', 'date'],
+            'calendarHolidayType' => ['required', 'in:Regular,Special Non Working,Special Working'],
+        ]);
+
+        $holiday = [
+            'HolidayName' => $validated['calendarHolidayName'],
+            'Date' => Carbon::parse($validated['calendarHolidayDate'])->toDateString(),
+            'Type' => $validated['calendarHolidayType'],
+        ];
+
+        if ($this->calendarHolidayId === null) {
+            DB::table('CalendarHoliday')->insert($holiday);
+            $this->taskMessage = 'Holiday created.';
+        } else {
+            DB::table('CalendarHoliday')->where('Id', $this->calendarHolidayId)->update($holiday);
+            $this->taskMessage = 'Holiday updated.';
+        }
+
+        $this->showCalendarHolidayModal = false;
+        $this->calendarHolidayId = null;
+    }
+
+    public function deleteCalendarHoliday(): void
+    {
+        if ($this->calendarHolidayId === null) {
+            return;
+        }
+
+        DB::table('CalendarHoliday')->where('Id', $this->calendarHolidayId)->delete();
+        $this->showCalendarHolidayModal = false;
+        $this->calendarHolidayId = null;
+        $this->taskMessage = 'Holiday deleted.';
+    }
+
+    public function closeCalendarHolidayForm(): void
+    {
+        $this->showCalendarHolidayModal = false;
+        $this->calendarHolidayId = null;
+        $this->resetValidation();
+    }
+
+    public function viewTask(int $taskId): void
+    {
+        $exists = DB::table('Task')
+            ->where('Id', $taskId)
+            ->where('IsCompleted', false)
+            ->exists();
+
+        if ($exists) {
+            $this->cancelEditingTask();
+            $this->viewingTaskId = $taskId;
+            $this->startEditingTask($taskId);
+        }
+    }
+
+    public function closeTaskDetails(): void
+    {
+        $this->cancelEditingTask();
+        $this->viewingTaskId = null;
+        $this->showCalendarCreateModal = false;
+        $this->resetValidation();
     }
 
     public function startEditingTask(int $taskId): void
     {
         $task = DB::table('Task')
-            ->where('Id', $taskId)
-            ->where('UserId', Auth::id())
-            ->where('IsCompleted', false)
+            ->from('Task as task')
+            ->leftJoin('Customer as customer', 'customer.Id', '=', 'task.CustomerId')
+            ->leftJoin('Document as document', 'document.Id', '=', 'task.DocumentId')
+            ->where('task.Id', $taskId)
+            ->where('task.UserId', Auth::id())
+            ->where('task.IsCompleted', false)
+            ->select([
+                'task.Id',
+                'task.Title',
+                'task.Description',
+                'task.DueDate',
+                'task.CustomerId',
+                'task.DocumentId',
+                'customer.Name as customer_name',
+                'document.Number as document_number',
+            ])
             ->first();
 
         if (! $task) {
@@ -120,11 +267,16 @@ class Dashboard extends Component
         $this->editTaskTitle = (string) $task->Title;
         $this->editTaskDescription = $this->sanitizeTaskDescription($task->Description) ?? '';
         $this->editTaskDueDate = (string) $task->DueDate;
+        $this->taskCustomerId = $task->CustomerId ? (int) $task->CustomerId : null;
+        $this->taskDocumentId = $task->DocumentId ? (int) $task->DocumentId : null;
+        $this->taskCustomerSearch = (string) ($task->customer_name ?? '');
+        $this->taskDocumentSearch = (string) ($task->document_number ?? '');
     }
 
     public function cancelEditingTask(): void
     {
         $this->reset(['editingTaskId', 'editTaskTitle', 'editTaskDescription', 'editTaskDueDate']);
+        $this->reset(['taskCustomerId', 'taskDocumentId', 'taskCustomerSearch', 'taskDocumentSearch']);
     }
 
     public function updateTask(): void
@@ -137,6 +289,8 @@ class Dashboard extends Component
             'editTaskTitle' => ['required', 'string', 'max:255'],
             'editTaskDescription' => ['nullable', 'string', 'max:5000'],
             'editTaskDueDate' => ['required', 'date'],
+            'taskCustomerId' => ['nullable', 'integer', 'exists:Customer,Id'],
+            'taskDocumentId' => ['nullable', 'integer', 'exists:Document,Id'],
         ]);
 
         $updated = DB::table('Task')
@@ -147,6 +301,8 @@ class Dashboard extends Component
                 'Title' => $validated['editTaskTitle'],
                 'Description' => $this->sanitizeTaskDescription($validated['editTaskDescription']),
                 'DueDate' => $validated['editTaskDueDate'],
+                'CustomerId' => $validated['taskCustomerId'],
+                'DocumentId' => $validated['taskDocumentId'],
                 'updated_at' => now(),
             ]);
 
@@ -185,6 +341,14 @@ class Dashboard extends Component
             ->whereDate('Date', $today)
             ->where('IsClockedOut', 0)
             ->sum('Total');
+
+        $todayPurchases = DB::table('Document as document')
+            ->join('Payment as payment', 'payment.DocumentId', '=', 'document.Id')
+            ->join('PaymentType as payment_type', 'payment_type.Id', '=', 'payment.PaymentTypeId')
+            ->where('document.DocumentTypeId', 1)
+            ->whereDate('payment.Date', $today)
+            ->whereRaw('LOWER(payment_type.Name) = ?', ['cash'])
+            ->sum('payment.Amount');
 
         $todayOrderDiscount = (clone $sales)
             ->whereDate('Date', $today)
@@ -266,17 +430,19 @@ class Dashboard extends Component
                         ->whereDate('p.Date', $today)
                         ->sum('p.amount');
 
-        $cashOnhand =  ((float) $creditCollected + (float) $todaySales + (float) $startingCashToday) - ((float) $todayDiscount  + (float) $todayReceivableTotal);
+        $cashOnhand = ((float) $creditCollected + (float) $todaySales + (float) $startingCashToday) - ((float) $todayDiscount + (float) $todayReceivableTotal + (float) $todayPurchases);
+        $startingCashAfterPurchases = (float) $startingCashToday - (float) $todayPurchases;
 
         $stats = [
-            ['label' => 'Sales Today', 'value' => '₱'.number_format($todaySales, 2), 'trend' => $today->format('M j')],
-            ['label' => 'Discount Today', 'value' => '₱'.number_format($todayDiscount, 2), 'trend' => $today->format('M j')],
-            ['label' => 'Receivables', 'value' => '₱'.number_format($receivableTotal, 2), 'trend' => 'Total outstanding'],
-            ['label' => "Today's Receivables", 'value' => '₱'.number_format($todayReceivableTotal, 2), 'trend' => $today->format('M j')],
-            ['label' => "Today's Profit", 'value' => '₱'.number_format($todayProfit, 2), 'trend' => $today->format('M j')],
-            ['label' => 'Starting Cash', 'value' => '₱'.number_format($startingCashToday, 2), 'trend' => $today->format('M j')],
-            ['label' => 'Credit Collected', 'value' => '₱'.number_format($creditCollected, 2), 'trend' => $today->format('M j')],
-            ['label' => 'Cash Onhand', 'value' => '₱'.number_format($cashOnhand, 2), 'trend' => $today->format('M j')],
+            ['label' => 'Sales Today', 'value' => '₱'.number_format($todaySales, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-chart-line', 'iconColor' => 'bg-emerald-50 text-emerald-700'],
+            ['label' => 'Purchases Today', 'value' => '₱'.number_format($todayPurchases, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-cart-shopping', 'iconColor' => 'bg-amber-50 text-amber-700'],
+            ['label' => 'Discount Today', 'value' => '₱'.number_format($todayDiscount, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-tags', 'iconColor' => 'bg-rose-50 text-rose-700'],
+            ['label' => 'Receivables', 'value' => '₱'.number_format($receivableTotal, 2), 'trend' => 'Total outstanding', 'icon' => 'fa-file-invoice-dollar', 'iconColor' => 'bg-indigo-50 text-indigo-700'],
+            ['label' => "Today's Receivables", 'value' => '₱'.number_format($todayReceivableTotal, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-calendar-day', 'iconColor' => 'bg-sky-50 text-sky-700'],
+            ['label' => "Today's Profit", 'value' => '₱'.number_format($todayProfit, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-arrow-trend-up', 'iconColor' => 'bg-green-50 text-green-700'],
+            ['label' => 'Starting Cash', 'value' => '₱'.number_format($startingCashAfterPurchases, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-money-bill-wave', 'iconColor' => 'bg-slate-100 text-slate-700'],
+            ['label' => 'Credit Collected', 'value' => '₱'.number_format($creditCollected, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-credit-card', 'iconColor' => 'bg-cyan-50 text-cyan-700'],
+            ['label' => 'Cash Onhand', 'value' => '₱'.number_format($cashOnhand, 2), 'trend' => $today->format('M j'), 'icon' => 'fa-wallet', 'iconColor' => 'bg-blue-50 text-blue-700'],
 
         ];
 
@@ -314,6 +480,40 @@ class Dashboard extends Component
 
         $recentTransactions->each(function ($transaction) use ($recentTransactionItems): void {
             $transaction->items = $recentTransactionItems->get($transaction->Id, collect());
+        });
+
+        $latestPurchases = DB::table('Document as document')
+            ->leftJoin('Customer as supplier', 'supplier.Id', '=', 'document.CustomerId')
+            ->where('document.DocumentTypeId', 1)
+            ->select([
+                'document.Id',
+                'document.Number',
+                'document.Date',
+                'document.Total',
+                'supplier.Name as supplier_name',
+            ])
+            ->orderByDesc('document.Date')
+            ->orderByDesc('document.Id')
+            ->limit(5)
+            ->get();
+
+        $latestPurchaseItems = DB::table('DocumentItem as item')
+            ->join('Product as product', 'product.Id', '=', 'item.ProductId')
+            ->whereIn('item.DocumentId', $latestPurchases->pluck('Id'))
+            ->select([
+                'item.DocumentId',
+                'product.Name as product_name',
+                'item.Quantity',
+                'item.Price',
+                'item.Discount',
+                'item.Total',
+            ])
+            ->orderBy('product.Name')
+            ->get()
+            ->groupBy('DocumentId');
+
+        $latestPurchases->each(function ($purchase) use ($latestPurchaseItems): void {
+            $purchase->items = $latestPurchaseItems->get($purchase->Id, collect());
         });
 
         $taskCustomers = DB::table('Customer')
@@ -360,16 +560,48 @@ class Dashboard extends Component
         });
 
         $dueTasks = $tasks->filter(fn ($task) => Carbon::parse($task->DueDate)->isSameDay($today));
+        $calendarMonthDate = Carbon::parse($this->calendarMonth.'-01')->startOfMonth();
+        $calendarStart = $calendarMonthDate->copy()->startOfWeek(Carbon::SUNDAY);
+        $calendarEnd = $calendarStart->copy()->addDays(41);
+        $calendarTaskGroups = $tasks->groupBy(fn ($task) => Carbon::parse($task->DueDate)->toDateString());
+        $calendarHolidayGroups = DB::table('CalendarHoliday')
+            ->whereDate('Date', '>=', $calendarStart->toDateString())
+            ->whereDate('Date', '<=', $calendarEnd->toDateString())
+            ->orderBy('Date')
+            ->get(['Id', 'HolidayName', 'Date', 'Type'])
+            ->groupBy(fn ($holiday) => Carbon::parse($holiday->Date)->toDateString());
+        $calendarWeeks = collect(range(0, 41))
+            ->map(function (int $offset) use ($calendarStart, $calendarMonthDate, $calendarTaskGroups, $calendarHolidayGroups): array {
+                $date = $calendarStart->copy()->addDays($offset);
+                $dateKey = $date->toDateString();
+
+                return [
+                    'date' => $dateKey,
+                    'day' => $date->day,
+                    'inMonth' => $date->month === $calendarMonthDate->month,
+                    'isToday' => $date->isSameDay(Carbon::today()),
+                    'tasks' => $calendarTaskGroups->get($dateKey, collect()),
+                    'holidays' => $calendarHolidayGroups->get($dateKey, collect()),
+                ];
+            })
+            ->chunk(7);
+        $selectedTask = $tasks->firstWhere('Id', $this->viewingTaskId);
+
         return view('livewire.dashboard', [
             'user' => $user,
             'stats' => $stats,
             'startingCashEntries' => $startingCashEntries,
             'recentTransactions' => $recentTransactions,
+            'latestPurchases' => $latestPurchases,
             'taskCustomers' => $taskCustomers,
             'taskDocuments' => $taskDocuments,
             'taskProducts' => $taskProducts,
             'tasks' => $tasks,
             'dueTasks' => $dueTasks,
+            'calendarWeeks' => $calendarWeeks,
+            'calendarMonthLabel' => $calendarMonthDate->format('F Y'),
+            'calendarHolidayId' => $this->calendarHolidayId,
+            'selectedTask' => $selectedTask,
         ]);
     }
 

@@ -7,6 +7,40 @@ import select2 from 'select2';
 import 'quill/dist/quill.snow.css';
 import 'select2/dist/css/select2.min.css';
 
+const themeStorageKey = 'poszen-theme';
+const isDarkTheme = () => document.documentElement.dataset.theme === 'dark';
+const updateThemeControls = () => {
+	const dark = isDarkTheme();
+
+	document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+		const nextTheme = dark ? 'light' : 'dark';
+		button.setAttribute('aria-pressed', String(dark));
+		button.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+		button.setAttribute('title', `Switch to ${nextTheme} theme`);
+		button.querySelector('[data-theme-toggle-label]').textContent = `${nextTheme === 'dark' ? 'Dark' : 'Light'} theme`;
+		button.querySelector('[data-theme-icon="dark"]').classList.toggle('hidden', dark);
+		button.querySelector('[data-theme-icon="light"]').classList.toggle('hidden', !dark);
+	});
+};
+
+const applyTheme = (theme) => {
+	document.documentElement.dataset.theme = theme;
+	localStorage.setItem(themeStorageKey, theme);
+	Chart.defaults.color = theme === 'dark' ? '#d2dbd5' : '#475569';
+	Chart.defaults.borderColor = theme === 'dark' ? '#3d4942' : '#e2e8f0';
+	Object.values(Chart.instances).forEach((chart) => chart.update('none'));
+	updateThemeControls();
+};
+
+Chart.defaults.color = isDarkTheme() ? '#d2dbd5' : '#475569';
+Chart.defaults.borderColor = isDarkTheme() ? '#3d4942' : '#e2e8f0';
+updateThemeControls();
+document.addEventListener('click', (event) => {
+	if (event.target.closest?.('[data-theme-toggle]')) {
+		applyTheme(isDarkTheme() ? 'light' : 'dark');
+	}
+});
+
 window.Quill = Quill;
 window.$ = window.jQuery = $;
 select2(window, $);
@@ -226,6 +260,10 @@ const initializeProductCategorySelect = () => {
 		return componentRoot && window.Livewire?.find(componentRoot.getAttribute('wire:id'));
 	};
 	const categorySelect = document.getElementById('product-report-category');
+	const selectedCategoryIds = () => {
+		const selected = $('#product-report-category').val() || [];
+		return selected.filter((categoryId) => categoryId !== 'all');
+	};
 
 	if (categorySelect && !$(categorySelect).hasClass('select2-hidden-accessible')) {
 		const $categories = $(categorySelect);
@@ -233,7 +271,7 @@ const initializeProductCategorySelect = () => {
 		$categories.select2({
 			allowClear: true,
 			closeOnSelect: false,
-			placeholder: 'All categories',
+			placeholder: 'Select categories...',
 			width: '100%',
 		});
 		$categories.on('change', () => {
@@ -243,7 +281,14 @@ const initializeProductCategorySelect = () => {
 				$(productSelect).empty().val(null).trigger('change.select2');
 			}
 
-			getWire(categorySelect)?.$set('productCategoryIds', $categories.val() || [], true);
+			const selected = $categories.val() || [];
+			const categoryIds = selectedCategoryIds();
+
+			if (selected.includes('all')) {
+				$categories.val(['all']).trigger('change.select2');
+			}
+
+			getWire(categorySelect)?.$set('productCategoryIds', selected.includes('all') ? ['all'] : categoryIds, true);
 		});
 	}
 
@@ -284,7 +329,7 @@ const initializeProductCategorySelect = () => {
 			delay: 250,
 			data: (params) => ({
 				term: params.term || '',
-				categories: $('#product-report-category').val() || [],
+				categories: selectedCategoryIds(),
 			}),
 		},
 		closeOnSelect: false,
@@ -364,7 +409,7 @@ document.addEventListener('livewire:init', () => {
 					datalabels: {
 						align: 'top',
 						anchor: 'end',
-						color: '#475569',
+						color: () => isDarkTheme() ? '#d2dbd5' : '#475569',
 						font: { size: 10, weight: '600' },
 						formatter: (value) => compactCurrency.format(Number(value || 0)),
 						offset: 4,

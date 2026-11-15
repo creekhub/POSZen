@@ -11,7 +11,12 @@
         <section class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             @foreach ($stats as $stat)
                 <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                    <p class="text-sm text-slate-500">{{ $stat['label'] }}</p>
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="text-sm text-slate-500">{{ $stat['label'] }}</p>
+                        <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl {{ $stat['iconColor'] }}" aria-hidden="true">
+                            <i class="fa-solid {{ $stat['icon'] }} text-lg"></i>
+                        </span>
+                    </div>
                     <div class="mt-4 flex items-end justify-between">
                         <h2 class="text-3xl font-bold">{{ $stat['value'] }}</h2>
                         <span class="text-sm font-medium text-emerald-600">{{ $stat['trend'] }}</span>
@@ -80,6 +85,40 @@
             </div>
 
             <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <h3 class="mb-4 text-xl font-bold">Latest Purchased</h3>
+                <div class="space-y-3">
+                    @forelse ($latestPurchases as $purchase)
+                        <details class="group rounded-xl bg-slate-50 px-4 py-3">
+                            <summary class="flex cursor-pointer list-none items-center justify-between gap-4">
+                                <div>
+                                    <p class="font-semibold">{{ $purchase->Number }}</p>
+                                    <p class="text-sm text-slate-500">{{ $purchase->supplier_name ?? 'No supplier' }} · {{ \Carbon\Carbon::parse($purchase->Date)->format('M j, Y') }}</p>
+                                </div>
+                                <span class="shrink-0 font-bold text-slate-700">₱{{ number_format($purchase->Total, 2) }}</span>
+                            </summary>
+                            <div class="mt-3 border-t border-slate-200 pt-3">
+                                <div class="space-y-1">
+                                    @forelse ($purchase->items as $item)
+                                        <div class="flex items-center justify-between gap-2 text-sm text-slate-600">
+                                            <span class="min-w-0 truncate">{{ $item->product_name }} <span class="text-slate-400">× {{ rtrim(rtrim(number_format($item->Quantity, 2), '0'), '.') }}</span></span>
+                                            <span class="shrink-0 text-right">₱{{ number_format($item->Price, 2) }} @if ((float) $item->Discount > 0)<span class="text-rose-600">· -₱{{ number_format($item->Discount, 2) }}</span>@endif <span class="font-medium text-slate-700">· ₱{{ number_format($item->Total, 2) }}</span></span>
+                                        </div>
+                                    @empty
+                                        <p class="text-sm text-slate-500">No product details available.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </details>
+                    @empty
+                        <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No purchases recorded yet.</p>
+                    @endforelse
+                </div>
+            </div>
+
+        </section>
+
+        <section class="mt-6 max-w-2xl">
+            <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
                 <h3 class="mb-4 text-xl font-bold">Starting Cash Entries</h3>
                 <div class="space-y-3">
                     @forelse ($startingCashEntries as $entry)
@@ -96,116 +135,273 @@
                     @endforelse
                 </div>
             </div>
+
         </section>
 
-        <section class="mt-8 grid grid-cols-2 gap-6">
-            <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Quick action</p>
-                <h2 class="mt-1 text-2xl font-bold">Create a task</h2>
-                <form wire:submit="createTask" class="mt-5 space-y-4">
-                    <div class="relative" data-task-mentions>
-                        <label for="task-title" class="mb-2 block text-sm font-medium text-slate-600">Title</label>
-                        <input id="task-title" wire:model="taskTitle" type="text" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Type / for products or @ for customers" autocomplete="off">
-                        <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"></div>
-                        @error('taskTitle') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
-                    </div>
-                    <div>
-                        <label for="task-due-date" class="mb-2 block text-sm font-medium text-slate-600">Reminder date</label>
-                        <input id="task-due-date" wire:model="taskDueDate" type="date" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                        @error('taskDueDate') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
-                    </div>
-                    <div class="grid gap-4 sm:grid-cols-2">
+                <section class="mt-8 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                    <header class="mb-5 flex flex-wrap items-center justify-between gap-4">
                         <div>
-                            <label for="task-customer" class="mb-2 block text-sm font-medium text-slate-600">Customer</label>
-                            <input id="task-customer" list="task-customer-options" wire:model.live="taskCustomerSearch" type="search" placeholder="Type customer name..." autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                            <datalist id="task-customer-options">
-                                @foreach ($taskCustomers as $customer)
-                                    <option value="{{ $customer->Name }}"></option>
-                                @endforeach
-                            </datalist>
+                            <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Task schedule</p>
+                            <h2 class="mt-1 text-2xl font-bold">{{ $calendarMonthLabel }}</h2>
                         </div>
-                        <div>
-                            <label for="task-document" class="mb-2 block text-sm font-medium text-slate-600">Document</label>
-                            <input id="task-document" list="task-document-options" wire:model.live="taskDocumentSearch" type="search" placeholder="Type document number..." autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                            <datalist id="task-document-options">
-                                @foreach ($taskDocuments as $document)
-                                    <option value="{{ $document->Number }}" label="{{ $document->customer_name ?? 'Walk-in customer' }} · {{ \Carbon\Carbon::parse($document->Date)->format('M j, Y') }}"></option>
-                                @endforeach
-                            </datalist>
+                        <div class="flex items-center gap-2">
+                            <button type="button" wire:click="changeCalendarMonth(-1)" aria-label="Previous month" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">&larr;</button>
+                            <button type="button" wire:click="changeCalendarMonth(0)" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Today</button>
+                            <button type="button" wire:click="changeCalendarMonth(1)" aria-label="Next month" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">&rarr;</button>
+                            <button type="button" wire:click="openCalendarHolidayForm" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">New holiday</button>
+                            <button type="button" wire:click="openCalendarTaskForm('{{ \Carbon\Carbon::today()->toDateString() }}')" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">New task</button>
                         </div>
-                    </div>
-                    <div class="relative" data-task-mentions>
-                        <label for="task-description-editor" class="mb-2 block text-sm font-medium text-slate-600">Notes</label>
-                        <div class="task-editor rounded-xl border border-slate-300 bg-white" data-task-editor-container data-livewire-property="taskDescription" data-initial-content="{{ $taskDescription }}">
-                            <div id="task-description-editor" data-task-editor wire:ignore hidden aria-label="Task notes"></div>
-                        </div>
-                        <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"></div>
+                    </header>
+
+                    <div class="grid grid-cols-7 border-l border-t border-slate-200">
+                        @foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday)
+                            <div class="border-b border-r border-slate-200 bg-slate-50 px-1 py-2 text-center text-xs font-semibold text-slate-600 sm:px-3">{{ $weekday }}</div>
+                        @endforeach
+                        @foreach ($calendarWeeks as $week)
+                            @foreach ($week as $day)
+                                <div wire:key="calendar-day-{{ $day['date'] }}" @class([
+                                    'min-h-28 border-b border-r border-slate-200 p-1 sm:p-2',
+                                    'bg-white' => $day['inMonth'],
+                                    'bg-slate-50 text-slate-400' => ! $day['inMonth'],
+                                ])>
+                                    <button type="button" wire:click="openCalendarTaskForm('{{ $day['date'] }}')" title="Create task on {{ \Carbon\Carbon::parse($day['date'])->format('F j, Y') }}" @class([
+                                        'mb-1 flex size-7 items-center justify-center rounded-full text-xs font-semibold',
+                                        'bg-slate-900 text-white' => $day['isToday'],
+                                        'text-slate-700 hover:bg-slate-100' => ! $day['isToday'] && $day['inMonth'],
+                                        'text-slate-400 hover:bg-slate-100' => ! $day['inMonth'],
+                                    ])>{{ $day['day'] }}</button>
+                                    <div class="space-y-1">
+                                        @foreach ($day['holidays'] as $calendarHoliday)
+                                            @php
+                                                $holidayIcon = match ($calendarHoliday->Type) {
+                                                    'Regular' => 'fa-flag',
+                                                    'Special Non Working' => 'fa-mug-hot',
+                                                    'Special Working' => 'fa-briefcase',
+                                                    default => 'fa-calendar-days',
+                                                };
+                                            @endphp
+                                            <button type="button" wire:key="calendar-holiday-{{ $calendarHoliday->Id }}" wire:click="openCalendarHolidayForm({{ $calendarHoliday->Id }})" title="Edit {{ $calendarHoliday->HolidayName }}" @class([
+                                                'flex w-full items-start gap-1.5 wrap-break-word rounded px-1 py-1 text-left text-[10px] font-semibold leading-tight sm:px-2 sm:text-xs',
+                                                'bg-rose-100 text-rose-900 hover:bg-rose-200' => $calendarHoliday->Type === 'Regular',
+                                                'bg-amber-100 text-amber-900 hover:bg-amber-200' => $calendarHoliday->Type === 'Special Non Working',
+                                                'bg-sky-100 text-sky-900 hover:bg-sky-200' => $calendarHoliday->Type === 'Special Working',
+                                                'bg-slate-100 text-slate-900 hover:bg-slate-200' => ! in_array($calendarHoliday->Type, ['Regular', 'Special Non Working', 'Special Working'], true),
+                                            ])>
+                                                <i class="fa-solid {{ $holidayIcon }} mt-0.5 shrink-0" aria-hidden="true"></i>
+                                                <span class="min-w-0">{{ $calendarHoliday->HolidayName }} <span class="font-normal">({{ $calendarHoliday->Type }})</span></span>
+                                            </button>
+                                        @endforeach
+                                        @foreach ($day['tasks'] as $calendarTask)
+                                            <button type="button" wire:key="calendar-task-{{ $calendarTask->Id }}" wire:click="viewTask({{ $calendarTask->Id }})" @class([
+                                                'flex w-full items-start gap-1.5 wrap-break-word rounded px-1 py-1 text-left text-[10px] font-medium leading-tight sm:px-2 sm:text-xs',
+                                                'bg-red-100 text-red-800 hover:bg-red-200' => \Carbon\Carbon::parse($calendarTask->DueDate)->lt(\Carbon\Carbon::today()),
+                                                'bg-emerald-100 text-emerald-900 hover:bg-emerald-200' => ! \Carbon\Carbon::parse($calendarTask->DueDate)->lt(\Carbon\Carbon::today()),
+                                            ])>
+                                                <i class="fa-solid fa-list-check mt-0.5 shrink-0" aria-hidden="true"></i>
+                                                <span class="min-w-0">{{ $calendarTask->Title }}</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        @endforeach
                     </div>
                     @if ($taskMessage)
-                        <p class="text-sm font-medium text-emerald-700">{{ $taskMessage }}</p>
+                        <output class="mt-4 block text-sm font-medium text-emerald-700">{{ $taskMessage }}</output>
                     @endif
-                    <button type="submit" class="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700">Save task</button>
-                </form>
-            </div>
+                </section>
 
-            <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                <div class="flex items-center justify-between gap-4">
-                    <div>
-                        <p class="text-sm uppercase tracking-[0.2em] text-slate-500">Follow-up list</p>
-                        <h2 class="mt-1 text-2xl font-bold">Open tasks</h2>
-                    </div>
-                    <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">{{ $tasks->count() }}</span>
-                </div>
-                <div class="mt-5 space-y-3">
-                    @forelse ($tasks as $task)
-                        <div class="flex items-start justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3">
-                            @if ($editingTaskId === (int) $task->Id)
-                                <form wire:submit.prevent="updateTask" class="w-full space-y-3">
+                @if ($showCalendarCreateModal)
+                    <dialog open data-task-modal wire:keydown.escape.window="closeTaskDetails" class="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center overflow-y-auto border-0 bg-slate-950/60 p-4" aria-modal="true" aria-labelledby="calendar-create-title">
+                        <section class="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
+                            <header class="mb-4 flex items-start justify-between gap-4">
+                                <div>
+                                    <p class="text-sm font-semibold uppercase tracking-[0.15em] text-slate-500">Calendar task</p>
+                                    <h2 id="calendar-create-title" class="mt-1 text-xl font-bold">Create a task</h2>
+                                </div>
+                                <button type="button" wire:click="closeTaskDetails" aria-label="Close create task dialog" class="rounded-lg border border-slate-300 px-3 py-2 text-xl font-semibold leading-none text-slate-700 hover:bg-slate-50">&times;</button>
+                            </header>
+                            <form wire:submit="createTask" class="space-y-4">
+                                <div class="relative" data-task-mentions>
+                                    <label for="task-title" class="mb-2 block text-sm font-medium text-slate-600">Title</label>
+                                    <input id="task-title" wire:model="taskTitle" type="text" class="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Type / for products or @ for customers" autocomplete="off">
+                                    <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"></div>
+                                    @error('taskTitle') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div>
+                                    <label for="task-due-date" class="mb-2 block text-sm font-medium text-slate-600">Due date</label>
+                                    <input id="task-due-date" wire:model="taskDueDate" type="date" class="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    @error('taskDueDate') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div class="grid gap-4 sm:grid-cols-2">
                                     <div>
-                                        <label for="edit-task-title-{{ $task->Id }}" class="mb-1 block text-xs font-medium text-slate-600">Title</label>
-                                        <input id="edit-task-title-{{ $task->Id }}" wire:model="editTaskTitle" type="text" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                        <label for="task-customer" class="mb-2 block text-sm font-medium text-slate-600">Customer</label>
+                                        <input id="task-customer" list="task-customer-options" wire:model.live="taskCustomerSearch" type="search" placeholder="Type customer name..." autocomplete="off" class="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                        <datalist id="task-customer-options">
+                                            @foreach ($taskCustomers as $customer)
+                                                <option value="{{ $customer->Name }}"></option>
+                                            @endforeach
+                                        </datalist>
                                     </div>
-                                    @error('editTaskTitle') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
                                     <div>
-                                        <label for="edit-task-notes-{{ $task->Id }}" class="mb-1 block text-xs font-medium text-slate-600">Notes</label>
-                                        <div class="task-editor rounded-lg border border-slate-300 bg-white" data-task-editor-container data-livewire-property="editTaskDescription" data-initial-content="{{ $editTaskDescription }}">
-                                            <div id="edit-task-notes-editor-{{ $task->Id }}" data-task-editor wire:ignore hidden aria-label="Task notes"></div>
+                                        <label for="task-document" class="mb-2 block text-sm font-medium text-slate-600">Document</label>
+                                        <input id="task-document" list="task-document-options" wire:model.live="taskDocumentSearch" type="search" placeholder="Type document number..." autocomplete="off" class="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                        <datalist id="task-document-options">
+                                            @foreach ($taskDocuments as $document)
+                                                <option value="{{ $document->Number }}" label="{{ $document->customer_name ?? 'Walk-in customer' }} · {{ \Carbon\Carbon::parse($document->Date)->format('M j, Y') }}"></option>
+                                            @endforeach
+                                        </datalist>
+                                    </div>
+                                </div>
+                                <div class="relative" data-task-mentions>
+                                    <label for="task-description-editor" class="mb-2 block text-sm font-medium text-slate-600">Notes</label>
+                                    <div class="task-editor rounded-lg border border-slate-300 bg-white" data-task-editor-container data-livewire-property="taskDescription" data-initial-content="{{ $taskDescription }}">
+                                        <div id="task-description-editor" data-task-editor wire:ignore hidden aria-label="Task notes"></div>
+                                    </div>
+                                    <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"></div>
+                                </div>
+                                <button type="submit" class="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700">Save task</button>
+                            </form>
+                        </section>
+                    </dialog>
+                @endif
+
+                @if ($showCalendarHolidayModal)
+                    <dialog open data-task-modal wire:keydown.escape.window="closeCalendarHolidayForm" class="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center overflow-y-auto border-0 bg-slate-950/60 p-4" aria-modal="true" aria-labelledby="calendar-holiday-title">
+                        <section class="my-auto w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl">
+                            <header class="mb-4 flex items-start justify-between gap-4">
+                                <div>
+                                    <p class="text-sm font-semibold uppercase tracking-[0.15em] text-amber-700">Calendar holiday</p>
+                                    <h2 id="calendar-holiday-title" class="mt-1 text-xl font-bold">{{ $calendarHolidayId ? 'Edit holiday' : 'Create a holiday' }}</h2>
+                                </div>
+                                <button type="button" wire:click="closeCalendarHolidayForm" aria-label="Close holiday dialog" class="rounded-lg border border-slate-300 px-3 py-2 text-xl font-semibold leading-none text-slate-700 hover:bg-slate-50">&times;</button>
+                            </header>
+                            <form wire:submit="saveCalendarHoliday" class="space-y-4">
+                                <div>
+                                    <label for="calendar-holiday-name" class="mb-1 block text-sm font-medium text-slate-600">Name</label>
+                                    <input id="calendar-holiday-name" wire:model="calendarHolidayName" type="text" maxlength="255" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500">
+                                    @error('calendarHolidayName') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div class="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label for="calendar-holiday-date" class="mb-1 block text-sm font-medium text-slate-600">Date</label>
+                                        <input id="calendar-holiday-date" wire:model="calendarHolidayDate" type="date" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500">
+                                        @error('calendarHolidayDate') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                    </div>
+                                    <div>
+                                        <label for="calendar-holiday-type" class="mb-1 block text-sm font-medium text-slate-600">Type</label>
+                                        <select id="calendar-holiday-type" wire:model="calendarHolidayType" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500">
+                                            <option value="Regular">Regular</option>
+                                            <option value="Special Non Working">Special Non Working</option>
+                                            <option value="Special Working">Special Working</option>
+                                        </select>
+                                        @error('calendarHolidayType') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between gap-3">
+                                    @if ($calendarHolidayId)
+                                        <button type="button" wire:click="deleteCalendarHoliday" wire:confirm="Delete this holiday?" class="rounded-lg border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">Delete</button>
+                                    @else
+                                        <span></span>
+                                    @endif
+                                    <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Save holiday</button>
+                                </div>
+                            </form>
+                        </section>
+                    </dialog>
+                @endif
+
+                @if ($selectedTask)
+                    <dialog open data-task-modal wire:keydown.escape.window="closeTaskDetails" class="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center overflow-y-auto border-0 bg-slate-950/60 p-4" aria-modal="true" aria-labelledby="task-details-title">
+                        <section class="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
+                            <header class="mb-5 flex items-start justify-between gap-4">
+                                <div>
+                                    <p class="text-sm font-semibold uppercase tracking-[0.15em] text-slate-500">Task details</p>
+                                    <h2 id="task-details-title" class="mt-1 text-xl font-bold">{{ $selectedTask->Title }}</h2>
+                                </div>
+                                <button type="button" wire:click="closeTaskDetails" aria-label="Close task details" class="rounded-lg border border-slate-300 px-3 py-2 text-xl font-semibold leading-none text-slate-700 hover:bg-slate-50">&times;</button>
+                            </header>
+                            @if ($editingTaskId === (int) $selectedTask->Id)
+                                <form wire:submit.prevent="updateTask" class="space-y-4">
+                                    <div>
+                                        <label for="edit-task-title" class="mb-1 block text-sm font-medium text-slate-600">Title</label>
+                                        <input id="edit-task-title" wire:model="editTaskTitle" type="text" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                        @error('editTaskTitle') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                    </div>
+                                    <div class="grid gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label for="edit-task-customer" class="mb-1 block text-sm font-medium text-slate-600">Customer</label>
+                                            <input id="edit-task-customer" list="task-customer-options" wire:model.live="taskCustomerSearch" type="search" placeholder="Type customer name..." autocomplete="off" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                            @error('taskCustomerId') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                        </div>
+                                        <div>
+                                            <label for="edit-task-document" class="mb-1 block text-sm font-medium text-slate-600">Document</label>
+                                            <input id="edit-task-document" list="task-document-options" wire:model.live="taskDocumentSearch" type="search" placeholder="Type document number..." autocomplete="off" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                            @error('taskDocumentId') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
                                         </div>
                                     </div>
-                                    @error('editTaskDescription') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
                                     <div>
-                                        <label for="edit-task-due-date-{{ $task->Id }}" class="mb-1 block text-xs font-medium text-slate-600">Due date</label>
-                                        <input id="edit-task-due-date-{{ $task->Id }}" wire:model="editTaskDueDate" type="date" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                        <label for="edit-task-due-date" class="mb-1 block text-sm font-medium text-slate-600">Due date</label>
+                                        <input id="edit-task-due-date" wire:model="editTaskDueDate" type="date" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                        @error('editTaskDueDate') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
                                     </div>
-                                    @error('editTaskDueDate') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
-                                    <div class="flex gap-2">
-                                        <button type="button" wire:click="updateTask" wire:loading.attr="disabled" wire:target="updateTask" class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Save changes</button>
-                                        <button type="button" wire:click="cancelEditingTask" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white">Cancel</button>
+                                    <datalist id="task-customer-options">
+                                        @foreach ($taskCustomers as $customer)
+                                            <option value="{{ $customer->Name }}"></option>
+                                        @endforeach
+                                    </datalist>
+                                    <datalist id="task-document-options">
+                                        @foreach ($taskDocuments as $document)
+                                            <option value="{{ $document->Number }}"></option>
+                                        @endforeach
+                                    </datalist>
+                                    <div class="relative" data-task-mentions>
+                                        <label for="edit-task-notes-editor" class="mb-1 block text-sm font-medium text-slate-600">Notes</label>
+                                        <div class="task-editor rounded-lg border border-slate-300 bg-white" data-task-editor-container data-livewire-property="editTaskDescription" data-initial-content="{{ $editTaskDescription }}">
+                                            <div id="edit-task-notes-editor" data-task-editor wire:ignore hidden aria-label="Task notes"></div>
+                                        </div>
+                                        <div data-task-suggestions class="absolute left-0 right-0 z-20 hidden max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"></div>
+                                        @error('editTaskDescription') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="submit" wire:loading.attr="disabled" wire:target="updateTask" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Save changes</button>
+                                        <button type="button" wire:click="completeTask({{ $selectedTask->Id }})" class="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">Mark complete</button>
                                     </div>
                                 </form>
                             @else
-                                <div class="min-w-0">
-                                    <p class="font-semibold text-slate-900">{{ $task->Title }}</p>
-                                    <p class="mt-1 text-sm {{ \Carbon\Carbon::parse($task->DueDate)->lessThanOrEqualTo(\Carbon\Carbon::today()) ? 'font-semibold text-amber-700' : 'text-slate-500' }}">{{ \Carbon\Carbon::parse($task->DueDate)->format('M j, Y') }}</p>
-                                    <p class="mt-1 text-xs text-slate-500">{{ $task->customer_name ?? 'No customer' }}{{ $task->document_number ? ' · '.$task->document_number : '' }}</p>
-                                    @if ($task->Description)
-                                        <div class="task-description mt-2 wrap-break-word text-sm text-slate-600">{!! $task->Description !!}</div>
+                                <dl class="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase text-slate-500">Due date</dt>
+                                        <dd class="mt-1 text-sm text-slate-900">{{ \Carbon\Carbon::parse($selectedTask->DueDate)->format('M j, Y') }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase text-slate-500">Customer</dt>
+                                        <dd class="mt-1 text-sm text-slate-900">{{ $selectedTask->customer_name ?? 'No customer' }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase text-slate-500">Document</dt>
+                                        <dd class="mt-1 text-sm text-slate-900">{{ $selectedTask->document_number ?? 'No document' }}</dd>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <dt class="text-xs font-semibold uppercase text-slate-500">Notes</dt>
+                                        @if ($selectedTask->Description)
+                                            <dd class="task-description mt-1 wrap-break-word text-sm text-slate-700">{!! $selectedTask->Description !!}</dd>
+                                        @else
+                                            <dd class="mt-1 text-sm text-slate-500">No notes.</dd>
+                                        @endif
+                                    </div>
+                                </dl>
+                                <div class="mt-6 flex flex-wrap gap-2">
+                                    @if ((int) $selectedTask->user_id === (int) auth()->id())
+                                        <button type="button" wire:click="startEditingTask({{ $selectedTask->Id }})" class="rounded-lg border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">Edit task</button>
                                     @endif
-                                </div>
-                                <div class="flex shrink-0 items-start gap-2">
-                                    @if ((int) $task->user_id === (int) auth()->id())
-                                        <button type="button" wire:click="startEditingTask({{ $task->Id }})" class="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Edit</button>
-                                    @endif
-                                    <button type="button" wire:click="completeTask({{ $task->Id }})" class="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Done</button>
+                                    <button type="button" wire:click="completeTask({{ $selectedTask->Id }})" class="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">Mark complete</button>
                                 </div>
                             @endif
-                        </div>
-                    @empty
-                        <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No open tasks.</p>
-                    @endforelse
-                </div>
-            </div>
-        </section>
+                        </section>
+                    </dialog>
+                @endif
+
     </div>
 
 <script>
@@ -215,7 +411,7 @@
     };
 
     const syncTaskReminderBodyLock = () => {
-        const isOpen = Boolean(document.querySelector('[role="alertdialog"]'));
+        const isOpen = Boolean(document.querySelector('[role="alertdialog"], [data-task-modal]'));
         document.body.classList.toggle('overflow-hidden', isOpen);
         document.documentElement.classList.toggle('overflow-hidden', isOpen);
     };
@@ -228,7 +424,7 @@
     syncTaskReminderBodyLock();
 
     const checkTaskReminderEveryThirtyMinutes = () => {
-        if (document.querySelector('[role="alertdialog"]')) {
+        if (document.querySelector('[role="alertdialog"], [data-task-modal]')) {
             return;
         }
 
